@@ -1,5 +1,5 @@
-use ndarray::{Array1, Array2};
-use ndarray_linalg::Solve;
+use std::fs::File;
+use std::io::Write;
 
 use std::f64::consts::PI;
 
@@ -70,23 +70,32 @@ impl Solver {
         }
     }
 
-    pub fn solve(&mut self) {
-        let n = self.npoints();
+    pub fn solve(&mut self, max_iter: usize) {
+        let mut new_u = self.soln.clone();
 
-        let mut a_flat = Vec::with_capacity(n * n);
-        for i in 0..n {
-            for j in 0..n {
-                a_flat.push(self.a[i][j])
+        let dx2 = self.dx * self.dx;
+        let dy2 = self.dy * self.dy;
+
+        for _ in 0..max_iter {
+            for j in 1..self.ny - 1 {
+                for i in 1..self.nx - 1 {
+                    let idx = self.idx(i, j);
+
+                    let left = self.soln[self.idx(i - 1, j)];
+                    let right = self.soln[self.idx(i + 1, j)];
+                    let down = self.soln[self.idx(i, j - 1)];
+                    let up = self.soln[self.idx(i, j + 1)];
+
+                    new_u[idx] = (
+                        (left + right) / dx2 + 
+                        (down + up) / dy2 -
+                        self.b[idx]
+                    ) / (2.0 / dx2 + 2.0 / dy2);
+                }
             }
+
+            self.soln.clone_from_slice(&new_u);
         }
-
-        let a = Array2::from_shape_vec((n, n), a_flat).expect("Failed to Build Dense Matrix");
-
-        let b = Array1::from_vec(self.b.clone());
-
-        let x = a.solve_into(b).expect("Linear Solve Failed!")
-        
-        self.soln = x.to_vec();
     }
 
     pub fn idx(&self, i: usize, j: usize) -> usize {
@@ -138,9 +147,25 @@ impl Solver {
             }
         }
     }
+
+    pub fn write(&self, filename: &str) {
+        let mut file = File::create(filename).expect("Failed to create file.");
+
+        for j in 0..self.ny {
+            for i in 0..self.nx {
+                let idx = self.idx(i, j);
+                let x = self.x[i];
+                let y = self.y[j];
+                let u = self.soln[idx];
+
+                writeln!(file, "{} {} {}", x, y, u).expect("Write failed.");
+            }
+        }
+    }
 }
 
 fn main() {
+    let filename: &str = "solution.dat";
     let mut solver = Solver::new(32, 32, 0.0, 2.0 * PI, 0.0, 2.0 * PI);
 
     println!("dx = {}", solver.dx);
@@ -155,7 +180,7 @@ fn main() {
         |x, y| x.cos() * y.cos(),
     );
 
-    solver.solve();
-
-    println!("{:?}", solver.soln);
+    solver.solve(5000);
+    
+    solver.write(filename);
 }
