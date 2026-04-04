@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 burn = { version = "0.20.1", features = ["train", "ndarray", "wgpu", "autodiff"] }
 rand = "0.8.5"
+ndarray = "0.17.2"
+ndarray-linalg = { version = "0.18.1", features = ["openblas-static"] }
