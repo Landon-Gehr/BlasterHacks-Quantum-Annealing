@@ -1,5 +1,7 @@
 use std::fs::File;
 use std::io::Write;
+use plotters::prelude::*;
+use sprs::{CsMat, TriMat};
 
 use std::f64::consts::PI;
 
@@ -14,7 +16,7 @@ pub struct Solver {
     pub dy: f64,
     pub x: Vec<f64>,
     pub y: Vec<f64>,
-    pub a: Vec<Vec<f64>>,
+    pub a: CsMat<f64>,
     pub b: Vec<f64>,
     pub soln: Vec<f64>,
 }
@@ -48,7 +50,7 @@ impl Solver {
             dy,
             x: Vec::new(),
             y: Vec::new(),
-            a: vec![vec![0.0; n]; n],
+            a: CsMat::zero((n, n)),
             b: vec![0.0; n],
             soln: vec![0.0; n],
         };
@@ -70,31 +72,76 @@ impl Solver {
         }
     }
 
-    pub fn solve(&mut self, max_iter: usize) {
+    pub fn solve(&mut self, max_iter: usize, tol: f64) {
+        let n = self.npoints();
         let mut new_u = self.soln.clone();
 
-        let dx2 = self.dx * self.dx;
-        let dy2 = self.dy * self.dy;
-
         for _ in 0..max_iter {
-            for j in 1..self.ny - 1 {
-                for i in 1..self.nx - 1 {
-                    let idx = self.idx(i, j);
+            let mut max_diff = 0.0_f64;
 
-                    let left = self.soln[self.idx(i - 1, j)];
-                    let right = self.soln[self.idx(i + 1, j)];
-                    let down = self.soln[self.idx(i, j - 1)];
-                    let up = self.soln[self.idx(i, j + 1)];
+            for row in 0..n {
+                let row_view = self.a.outer_view(row).expect("Missing sparse row");
 
-                    new_u[idx] = (
-                        (left + right) / dx2 + 
-                        (down + up) / dy2 -
-                        self.b[idx]
-                    ) / (2.0 / dx2 + 2.0 / dy2);
+                let mut diag = 0.0;
+                let mut sigma = 0.0;
+
+                for (col, val) in row_view.iter() {
+                    if col == row {
+                        diag = *val;
+                    } else {
+                        sigma += val * self.soln[col];
+                    }
                 }
+
+                if diag == 0.0 {
+                    panic!("Zero diagonal at row {}", row);
+                }
+
+                new_u[row] = (self.b[row] - sigma) / diag;
+                max_diff = max_diff.max((new_u[row] - self.soln[row]).abs());
             }
 
             self.soln.clone_from_slice(&new_u);
+
+            if max_diff < tol {
+                break;
+            }
+        }
+    }   
+
+    pub fn plot(&self, filename: &str) {
+        let root = BitMapBackend::new(filename, (800, 800)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+
+        let mut chart = ChartBuilder::on(&root)
+        .margin(10)
+        .caption("PDE Solution", "sans-serif, 20")
+        .build_cartesian_2d(
+            self.x_min..self.x_max,
+            self.y_min..self.y_max
+        )
+        .unwrap();
+
+        chart.configure_mesh().draw().unwrap();
+
+        let dx = self.dx;
+        let dy = self.dy;
+
+        for j in 0..self.ny {
+            for i in 0..self.nx {
+                let idx = self.idx(i, j);
+                let u = self.soln[idx];
+
+                let color = HSLColor(240.0 / 360.0 - u * 0.2, 1.0, 0.5);
+
+                chart.draw_series(std::iter::once(Rectangle::new(
+                    [
+                        (self.x[i], self.y[j]),
+                        (self.x[i] + dx, self.y[j] + dy),
+                    ],
+                    color.filled(),
+                ))).unwrap();
+            }
         }
     }
 
@@ -112,7 +159,7 @@ impl Solver {
         G: Fn(f64, f64) -> f64,
     {
         let n = self.npoints();
-        self.a = vec![vec![0.0; n]; n];
+        let mut tri = TriMat::<f64>::new((n, n));
         self.b = vec![0.0; n];
 
         let dx2 = self.dx * self.dx;
@@ -128,24 +175,27 @@ impl Solver {
                     i == 0 || i == self.nx - 1 || j == 0 || j == self.ny - 1;
 
                 if is_boundary {
-                    self.a[row][row] = 1.0;
+                    tri.add_triplet(row, row, 1.0);
                     self.b[row] = g(x, y);
+                    self.soln[row] = g(x, y);
                 } else {
                     let left = self.idx(i - 1, j);
                     let right = self.idx(i + 1, j);
                     let down = self.idx(i, j - 1);
                     let up = self.idx(i, j + 1);
 
-                    self.a[row][left] = 1.0 / dx2;
-                    self.a[row][right] = 1.0 / dx2;
-                    self.a[row][down] = 1.0 / dy2;
-                    self.a[row][up] = 1.0 / dy2;
-                    self.a[row][row] = -2.0 / dx2 - 2.0 / dy2;
-
+                    tri.add_triplet(row, left, 1.0 / dx2);
+                    tri.add_triplet(row, right, 1.0 / dx2);
+                    tri.add_triplet(row, down, 1.0 / dy2);
+                    tri.add_triplet(row, up, 1.0 / dy2);
+                    tri.add_triplet(row, row, -2.0 / dx2 - 2.0 / dy2);
+                    
                     self.b[row] = f(x, y);
                 }
             }
         }
+
+        self.a = tri.to_csr()
     }
 
     pub fn write(&self, filename: &str) {
@@ -166,7 +216,7 @@ impl Solver {
 
 fn main() {
     let filename: &str = "solution.dat";
-    let mut solver = Solver::new(32, 32, 0.0, 2.0 * PI, 0.0, 2.0 * PI);
+    let mut solver = Solver::new(64, 64, 0.0, 4.0 * PI, 0.0, 4.0 * PI);
 
     println!("dx = {}", solver.dx);
     println!("dy = {}", solver.dy);
@@ -180,7 +230,9 @@ fn main() {
         |x, y| x.cos() * y.cos(),
     );
 
-    solver.solve(5000);
-    
+    solver.solve(5000,1e-9);
     solver.write(filename);
+
+    solver.plot("Solution.png");
+
 }
