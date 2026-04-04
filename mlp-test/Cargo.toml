@@ -1,0 +1,8 @@
+[package]
+name = "mlp-test"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+burn = { version = "0.20.1", features = ["train", "ndarray", "wgpu", "autodiff"] }
+rand = "0.8.5"
