@@ -20,4 +20,5 @@ target
 **/*.log
 **/*.nav
 **/*.snm
+**/*.toc
 **/*.synctex.gz
