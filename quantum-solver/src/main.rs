@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use qubo::{
+use quantum_solver::{
     annealing::solve_ising_model,
     dense::{dense_to_csmat, dense_to_csvec},
     ising::{qubo_to_ising, sparse_ising_to_quantrs},

@@ -1436,7 +1436,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "qubo"
+name = "quantum-solver"
 version = "0.1.0"
 dependencies = [
  "quantrs2-anneal",
