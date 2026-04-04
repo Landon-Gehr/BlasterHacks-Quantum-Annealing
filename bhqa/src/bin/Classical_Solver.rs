@@ -157,11 +157,7 @@ impl Solver {
         self.nx * self.ny
     }
 
-    pub fn build<F, G>(&mut self, f: F, g: G)
-    where
-        F: Fn(f64, f64) -> f64,
-        G: Fn(f64, f64) -> f64,
-    {
+    pub fn build(&mut self) {
         let n = self.npoints();
         let mut tri = TriMat::<f64>::new((n, n));
         self.b = vec![0.0; n];
@@ -180,8 +176,8 @@ impl Solver {
 
                 if is_boundary {
                     tri.add_triplet(row, row, 1.0);
-                    self.b[row] = g(x, y);
-                    self.soln[row] = g(x, y);
+                    self.b[row] = self.g(x, y);
+                    self.soln[row] = self.g(x, y);
                 } else {
                     let left = self.idx(i - 1, j);
                     let right = self.idx(i + 1, j);
@@ -194,7 +190,7 @@ impl Solver {
                     tri.add_triplet(row, up, 1.0 / dy2);
                     tri.add_triplet(row, row, -2.0 / dx2 - 2.0 / dy2);
                     
-                    self.b[row] = f(x, y);
+                    self.b[row] = self.f(x, y);
                 }
             }
         }
@@ -216,6 +212,22 @@ impl Solver {
             }
         }
     }
+
+    pub fn g(&self, x: f64, y: f64) -> f64 {
+        if x == self.x_min {
+            y.cos() * x.cos()
+        } else if y == self.y_min {
+            x.cos() * y.cos()
+        } else if x == self.x_max {
+            y.cos() * x.cos()
+        } else {
+            y.cos() * x.cos()
+        }
+    }
+
+    pub fn f(&self, x: f64, y: f64) -> f64 {
+        x.sin() + y.sin() + x.cos() + y.cos() + x.sin() * y.sin() + x.cos() * y.cos()
+    }
 }
 
 fn main() {
@@ -229,10 +241,7 @@ fn main() {
     println!("y[0] = {}", solver.y[0]);
     println!("y[last] = {}", solver.y[solver.ny - 1]);
 
-    solver.build(
-        |x, y| -2.0 * x.cos() * y.cos(),
-        |x, y| x.cos() * y.cos(),
-    );
+    solver.build();
 
     solver.solve(5000,1e-9);
     solver.write(filename);
