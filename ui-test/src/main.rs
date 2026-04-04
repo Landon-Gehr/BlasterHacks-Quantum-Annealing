@@ -5,12 +5,12 @@ fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([600.0, 500.0])
-            .with_title("x² plot"),
+            .with_title("x^2 plot"),
         ..Default::default()
     };
 
     eframe::run_native(
-        "x² plot",
+        "x^2 plot",
         options,
         Box::new(|_cc| Ok(Box::new(MyApp::default()))),
     )
@@ -25,7 +25,7 @@ struct MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("y = x²");
+            ui.heading("y = x^2");
 
             let points: PlotPoints = (-100..=100)
                 .map(|i| {
@@ -37,7 +37,7 @@ impl eframe::App for MyApp {
             Plot::new("x_squared")
                 .view_aspect(2.0)
                 .show(ui, |plot_ui| {
-                    plot_ui.line(Line::new(points).name("x²"));
+                    plot_ui.line(Line::new(points).name("x^2"));
                 });
 
             ui.separator();
