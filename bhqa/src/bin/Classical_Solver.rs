@@ -59,6 +59,10 @@ impl Solver {
         solver
     }
 
+    pub fn build_qubo(&mut self) {
+        
+    }
+
     pub fn build_mesh(&mut self) {
         self.x = vec![0.0; self.nx];
         self.y = vec![0.0; self.ny];
