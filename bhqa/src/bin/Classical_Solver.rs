@@ -226,7 +226,8 @@ impl Solver {
     }
 
     pub fn f(&self, x: f64, y: f64) -> f64 {
-        x.sin() + y.sin() + x.cos() + y.cos() + x.sin() * y.sin() + x.cos() * y.cos()
+        // x.sin() + y.sin() + x.cos() + y.cos() + x.sin() * y.sin() + x.cos() * y.cos()
+        x.cos() * y.cos()
     }
 }
 

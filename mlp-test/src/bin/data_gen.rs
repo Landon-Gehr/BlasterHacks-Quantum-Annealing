@@ -7,6 +7,7 @@ use std::f64::consts::PI;
 use ndarray::Array2;
 use ndarray::prelude::*;
 use ndarray_linalg::Solve;
+use rand::Rng;
 
 pub struct Solver {
     pub nx: usize,
@@ -62,6 +63,10 @@ impl Solver {
         solver
     }
 
+    pub fn build_qubo(&mut self) {
+        
+    }
+
     pub fn build_mesh(&mut self) {
         self.x = vec![0.0; self.nx];
         self.y = vec![0.0; self.ny];
@@ -113,7 +118,7 @@ impl Solver {
     }   
 
 
-    pub fn solve_dense(&mut self) { //way too big, use iterative
+    pub fn solve_dense(&mut self) { //way too big, use sparse solve
         let (rows, cols) = self.a.shape();
 
         let mut dense = Array2::<f64>::zeros((rows, cols));
@@ -145,11 +150,16 @@ impl Solver {
         let dx = self.dx;
         let dy = self.dy;
 
+        let min = self.soln.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max = self.soln.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+
         for j in 0..self.ny {
             for i in 0..self.nx {
                 let idx = self.idx(i, j);
                 let u = self.soln[idx];
 
+                // let t = if max > min { ((u - min) / (max - min) *255.0) as u8} else { 128 };
+                // let color = RGBColor(t,t,t);
                 let color = HSLColor(240.0 / 360.0 - u * 0.2, 1.0, 0.5);
 
                 chart.draw_series(std::iter::once(Rectangle::new(
@@ -171,7 +181,7 @@ impl Solver {
         self.nx * self.ny
     }
 
-    pub fn build(&mut self) {
+    pub fn build(&mut self, forcing_coefs: Vec<f64>) {
         let n = self.npoints();
         let mut tri = TriMat::<f64>::new((n, n));
         self.b = vec![0.0; n];
@@ -190,8 +200,9 @@ impl Solver {
 
                 if is_boundary {
                     tri.add_triplet(row, row, 1.0);
-                    self.b[row] = self.g(x, y);
-                    self.soln[row] = self.g(x, y);
+                    let boundary_coefs: Vec<f64> = [1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0].to_vec();
+                    self.b[row] = self.g(x, y, boundary_coefs.clone());
+                    self.soln[row] = self.g(x, y, boundary_coefs.clone());
                 } else {
                     let left = self.idx(i - 1, j);
                     let right = self.idx(i + 1, j);
@@ -204,7 +215,7 @@ impl Solver {
                     tri.add_triplet(row, up, 1.0 / dy2);
                     tri.add_triplet(row, row, -2.0 / dx2 - 2.0 / dy2);
                     
-                    self.b[row] = self.f(x, y);
+                    self.b[row] = self.f(x, y, forcing_coefs.clone());
                 }
             }
         }
@@ -212,54 +223,56 @@ impl Solver {
         self.a = tri.to_csr()
     }
 
-    pub fn write(&self, filename: &str) {
-        let mut file = File::create(filename).expect("Failed to create file.");
-
+    pub fn write(&self, file: &mut File) {
         for j in 0..self.ny {
             for i in 0..self.nx {
                 let idx = self.idx(i, j);
-                let x = self.x[i];
-                let y = self.y[j];
                 let u = self.soln[idx];
-
-                writeln!(file, "{} {} {}", x, y, u).expect("Write failed.");
+                writeln!(file, "{}", u).expect("Write failed.");
             }
         }
     }
 
-    pub fn g(&self, x: f64, y: f64) -> f64 {
+    pub fn g(&self, x: f64, y: f64, coefs: Vec<f64>) -> f64 {
         if x == self.x_min {
-            y.cos() * x.cos()
+            (coefs[0] * y).cos() * (coefs[1] * x).cos()
         } else if y == self.y_min {
-            x.cos() * y.cos()
+            (coefs[2] *  x).cos() * (coefs[3] * y).cos()
         } else if x == self.x_max {
-            y.cos() * x.cos()
+            (coefs[4] * y).cos() * (coefs[5] * x).cos()
         } else {
-            y.cos() * x.cos()
+            (coefs[6] * y).cos() * (coefs[7] * x).cos()
         }
     }
 
-    pub fn f(&self, x: f64, y: f64) -> f64 {
-        x.sin() + y.sin() + x.cos() + y.cos() + x.sin() * y.sin() + x.cos() * y.cos()
+    pub fn f(&self, x: f64, y: f64, coefs: Vec<f64>) -> f64 {
+        // (coefs[0] * x).sin() + (coefs[1] * y).sin() + (coefs[2] * x).cos() + (coefs[3] * y).cos() + (coefs[4] * x).sin() * (coefs[5] * y).sin() + (coefs[6] * x).cos() * (coefs[7] * y).cos()
+        x.cos() * y.cos()
     }
 }
 
 fn main() {
-    let filename: &str = "solution.dat";
-    let mut solver = Solver::new(256, 256, 0.0, 4.0 * PI, 0.0, 4.0 * PI);
+    let filename: &str = "testing.dat";
 
-    println!("dx = {}", solver.dx);
-    println!("dy = {}", solver.dy);
-    println!("x[0] = {}", solver.x[0]);
-    println!("x[last] = {}", solver.x[solver.nx - 1]);
-    println!("y[0] = {}", solver.y[0]);
-    println!("y[last] = {}", solver.y[solver.ny - 1]);
+    let mut rng = rand::thread_rng();
+    let mut file = std::fs::OpenOptions::new()
+    .append(true)
+    .create(true)
+    .open(filename)
+    .expect("Failed to open file");
 
-    solver.build();
+    let n_samples = 1000;
+    let n_outs = 10;
 
-    solver.solve_sparse(2500,1e-9);
-    solver.write(filename);
+    for i in 0..n_samples {
+        let forcing_coefs: Vec<f64> = (0..8).map(|_| rng.gen_range(0.0..3.0)).collect();
 
-    solver.plot("Solution.png");
+        let mut solver = Solver::new(32, 32, 0.0, 4.0 * PI, 0.0, 4.0 * PI);
+        solver.build(forcing_coefs.clone());
+        solver.solve_sparse(5000, 1e-9);
+        solver.write(&mut file);
+        
+        if i % (n_samples/n_outs) == 0 { println!("generating sample {}/{}, forcing: {:?}", i, n_samples, forcing_coefs); let savename = format!("solution_{}.png", i); solver.plot(&savename);}
+    }
 
 }
