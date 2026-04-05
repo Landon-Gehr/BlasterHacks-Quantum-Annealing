@@ -5,6 +5,7 @@ use burn::{
     prelude::*,
     tensor::{Tensor, Distribution, backend::AutodiffBackend},
 };
+use plotters::prelude::*;
 
 type MyBackend = burn::backend::Wgpu;
 type MyAutodiff = burn::backend::Autodiff<MyBackend>;
@@ -22,13 +23,13 @@ pub struct DiffusionModel<B: AutodiffBackend> {
 
 impl<B: AutodiffBackend> DiffusionModel<B> {
     pub fn new(device: B::Device, t: usize) -> Self {
-        let mlp = ErrorMlp::<B>::new(&device);
+        let res: (usize,usize) = (4,4); 
+        let mlp = ErrorMlp::<B>::new(&device, res);
         let optim = AdamConfig::new().with_epsilon(1e-5).init();
         let betas_vec: Vec<f32> = (0..t).map(|i| 1e-4 + (2e-2 - 1e-4) * i as f32 / (t - 1) as f32).collect();
         let betas = Tensor::<B, 1>::from_floats(betas_vec.as_slice(), &device);
         let alphas: Tensor<B, 1> = 1.0 - betas.clone();
         let alpha_bars = alphas.clone().cumprod(0);
-        let res: (usize,usize) = (4,4); 
         Self {
             mlp,
             optim,
@@ -41,18 +42,18 @@ impl<B: AutodiffBackend> DiffusionModel<B> {
         }
     }
 
-    pub fn noise_data(&mut self, x: Tensor<B, 2>) -> (Tensor<B, 2>, Tensor<B, 1, Int>,Tensor<B, 2>) {
+    pub fn noise_data(&mut self, x: Tensor<B, 3>) -> (Tensor<B, 3>, Tensor<B, 1, Int>,Tensor<B, 3>) {
         let batch_size = x.dims()[0];
         let ts = Tensor::<B, 1>::random([batch_size],Distribution::Uniform(0.0, (self.t + 1) as f64),&self.device).floor().int();
-        let eps = Tensor::<B, 2>::random([batch_size, x.dims().len()], Distribution::Normal(0.0, 1.0), &self.device);    
+        let eps = Tensor::<B, 3>::random(x.dims(), Distribution::Normal(0.0, 1.0), &self.device);    
         let alpha_bars_t = self.alpha_bars.clone().select(0, ts.clone()); 
-        let x_0_coef = alpha_bars_t.clone().sqrt().reshape([batch_size, 1]);
-        let epsilon_coef = (alpha_bars_t.ones_like() - alpha_bars_t).sqrt().reshape([batch_size, 1]);
+        let x_0_coef = alpha_bars_t.clone().sqrt().reshape([batch_size, 1, 1]);
+        let epsilon_coef = (alpha_bars_t.ones_like() - alpha_bars_t).sqrt().reshape([batch_size, 1, 1]);
         let x_noised = x_0_coef * x + epsilon_coef * eps.clone();
         (x_noised, ts, eps)
     }
 
-    pub fn unnoise_data(&self, x_t: Tensor<B, 2>) -> Tensor<B, 2> {
+    pub fn unnoise_data(&self, x_t: Tensor<B, 3>) -> Tensor<B, 3> {
         let mut x = x_t.clone();
         let batch_size = x_t.dims()[0];
 
@@ -65,7 +66,7 @@ impl<B: AutodiffBackend> DiffusionModel<B> {
             let var_eps_coef  = 1.0 / alpha_t.clone().sqrt();           
             let dev_eps_coef  = beta_t.sqrt();                            
 
-            let z: Tensor<B, 2> = if t > 1 {
+            let z: Tensor<B, 3> = if t > 1 {
                 Tensor::random(x.dims(), Distribution::Normal(0.0, 1.0), &self.device)
             } else {
                 Tensor::zeros(x.dims(), &self.device)
@@ -79,7 +80,7 @@ impl<B: AutodiffBackend> DiffusionModel<B> {
         x
     }
 
-    pub fn train(&mut self, train_data: Vec<Tensor<B, 2>>, val_data: Vec<Tensor<B, 2>>, epochs: usize) {
+    pub fn train(&mut self, train_data: Vec<Tensor<B, 3>>, val_data: Vec<Tensor<B, 3>>, epochs: usize) {
         let mut best_val_loss = f32::INFINITY;
         let mut epoch_train_loss = f32::INFINITY;
         let mut epoch_val_loss = f32::INFINITY;
@@ -96,7 +97,6 @@ impl<B: AutodiffBackend> DiffusionModel<B> {
             let mut batch_losses: Vec<f32> = Vec::new();
 
             for x_0 in train_data.iter() {
-                let batch_size = x_0.dims()[0];
                 let (x_t, t_tensor, eps) = self.noise_data(x_0.clone());
 
                 let eps_hat = self.mlp.forward(x_t, t_tensor);
@@ -145,44 +145,77 @@ impl<B: AutodiffBackend> DiffusionModel<B> {
     }
 
     pub fn inference(&self) -> Tensor<B, 2> {
-        let mut x = Tensor::<B, 2>::random([self.res.0,self.res.1],Distribution::Uniform(0.0, 1.0),&self.device);
-        let sample: Tensor::<B, 2> = self.unnoise_data(x);
-        sample
+        let x = Tensor::<B, 3>::random([1, self.res.0,self.res.1],Distribution::Normal(0.0, 1.0),&self.device);
+        let sample: Tensor::<B, 3> = self.unnoise_data(x);
+        sample.squeeze::<2>()
     }
 }
 
 #[derive(Module, Debug)]
 pub struct ErrorMlp<B: Backend> {
+    res: (usize, usize),
     linear1: Linear<B>,
     relu: Relu,
     linear2: Linear<B>,
 }
 
 impl<B: Backend> ErrorMlp<B> {
-    pub fn new(device: &B::Device) -> Self {
+    pub fn new(device: &B::Device, res: (usize, usize)) -> Self {
         Self {
-            linear1: LinearConfig::new(4, 512).with_bias(true).init(device),
+            res,
+            linear1: LinearConfig::new(res.0 * res.1, 512).with_bias(true).init(device),
             relu: Relu::new(),
-            linear2: LinearConfig::new(512, 4).with_bias(true).init(device),
+            linear2: LinearConfig::new(512, res.0 * res.1).with_bias(true).init(device),
         }
     }
 
-    pub fn forward(&self, x: Tensor<B, 2>, t: Tensor<B, 1, Int>) -> Tensor<B, 2> {
+    pub fn forward(&self, x: Tensor<B, 3>, _t: Tensor<B, 1, Int>) -> Tensor<B, 3> {
+        let [batch_size, h, w] = x.dims();
+        let x = x.reshape([batch_size, h * w]);
         let x = self.linear1.forward(x);
         let x = self.relu.forward(x);
-        self.linear2.forward(x)
+        let x = self.linear2.forward(x);
+        x.reshape([batch_size, h, w])
     }
 }
 
+
+pub fn plot_heatmap(tensor: Tensor<MyBackend, 2>, path: &str) {
+    let dims = tensor.dims();
+    let h = dims[0];
+    let w = dims[1];
+    let vals: Vec<f32> = tensor.to_data().to_vec().unwrap();
+
+    let root = BitMapBackend::new(path, (w as u32, h as u32)).into_drawing_area();
+    root.fill(&WHITE).unwrap();
+
+    let cells = root.split_evenly((h, w));
+    for (i, cell) in cells.into_iter().enumerate() {
+        let val = vals[i].clamp(0.0, 1.0);
+        let r = (val * 255.0) as u8;
+        let b = ((1.0 - val) * 255.0) as u8;
+        cell.fill(&RGBColor(r, 0, b)).unwrap();
+    }
+
+    root.present().unwrap();
+}
+
 fn main() {
-    // let device = <MyAutodiff as Backend>::Device::default();
-    // let mut model = DiffusionModel::<MyAutodiff>::new(device.clone(), 1000);
-    // let x = Tensor::<MyAutodiff, 2>::random(
-    //     [1024, 4],
-    //     Distribution::Uniform(0.0, 1.0),
-    //     &device,
-    // );
-    // model.train(x, 1000);
-    // let out = model.inference([1, 4]);
-    // println!("{:?}", out);
+    let res: (usize, usize) = (4,4);
+    let batch_size = 32;
+    let n_train = 100;
+    let n_test = 20;
+    let device = <MyAutodiff as Backend>::Device::default();
+    let mut model = DiffusionModel::<MyAutodiff>::new(device.clone(), 100);
+    let train_x: Vec<Tensor<MyAutodiff, 3>> = (0..n_train).map(|_| Tensor::<MyAutodiff, 3>::random([batch_size, res.0, res.1],Distribution::Uniform(0.0, 2.0),&device).floor()).collect();
+    let test_x: Vec<Tensor<MyAutodiff, 3>> = (0..n_test).map(|_| Tensor::<MyAutodiff, 3>::random([batch_size, res.0, res.1],Distribution::Uniform(0.0, 2.0),&device).floor()).collect();
+    model.train(train_x, test_x, 10);
+    let out = model.inference();
+    println!("{:?}", out);
+
+    let data = out.to_data();
+    let vals: Vec<f32> = data.to_vec().unwrap();
+
+    let out_inner = out.inner();  // Tensor<MyBackend, 2>
+    plot_heatmap(out_inner, "output.png");
 }
