@@ -12,22 +12,60 @@
       </p>
       <div class="pixel-card alt">
         <p> About DDPMs <a href="https://arxiv.org/abs/2006.11239"> Here</a> </p>
-        <ul>
-          $$asdfsdsa_Dfasdfsa$$
-          <img src="../markov_chain.png">
-          <img src="../ddpm_training.png">
-          <img src="../before.png">
+          
+          <div class="centered-images">
+                  <p> DDPMs are define in terms of a Markov Chain of gaussian noise applications. The noising a.k.a. forward process which is defined by the distribution q with is used to slowly apply noise to the sample from the original distribution p according to a schedule beta. In our case the reverse process has an additional conditional probability for the know values of the forcing function and boundary conditions. The existence of these initial and boundary conditions are used in attempting to get the model to iterate back to the solution of the pde as the most likely state rather than simply image generation from pure noise.</p>
+
+  <img src="../markov_chain.png">
+          <p> By defining a process this way we can train a model to predict on the small amount of gaussian error applied at each step so that when aided by the conditional of the the current step the model can accurately remove small amounts of noise at a time. After training a model in that fashion it is possible to iterate backwards from pure noise toward a likely state from the target distribution.</p>
+
+  <img src="../ddpm_training.png">
+  <p>The ability to learn all possible PDE solution states would be impossible. Instead we looked limiting to combinations of 2D trigometric functions up to the 5th harmonic. Below is the known solution cos(x)cos(y) which is an element X_0 from our target distribution.</p>
+
+  <img class="before-img" src="../before.png">
+    <p> Below are the results of the reverse process after 25, 50, 100, and 1000 timesteps.</p> 
+
+</div>
+        <div class="diffusion-row">
           <img src="../diffused_25.png">
           <img src="../diffused_50.png">
           <img src="../diffused_100.png">
           <img src="../diffused.png">
-        </ul>
+        </div>
+
+        <p> As we can see that the model is unable to converge on the solution alone. This is likely a result of the such a noisy target distribution that to accurately predict from many close most likely states becomes a very difficult task. However, it is still clearly shown that the DDPM model outperforms random noise and is able to speed up the annealing process with a better initial guess than random.
       </div>
     </div>
   </article>
 </section>
 
 <style>
+.diffusion-row {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .diffusion-row img {
+    height: 200px;
+  }
+
+  .centered-images {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.before-img {
+  display: block;        /* required for margin auto */
+  margin: 0 auto;        /* centers horizontally */
+  max-width: 300px;
+  height: auto;
+}
+
   .page-shell {
     display: grid;
     gap: 1.15rem;

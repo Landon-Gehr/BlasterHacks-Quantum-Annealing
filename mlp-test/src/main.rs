@@ -361,33 +361,4 @@ fn main() {
     let train_x = load_data("training.dat", batch_size, res.0, res.1, &device);
     model.train(train_x, 500);
 
-
-    // let model = DiffusionModel::load(device.clone(), n_timesteps, "model", res, mlp);
-    
-    let file = File::open("test.dat").expect("Failed to open file");
-    let reader = BufReader::new(file);
-
-    let vals: Vec<f32> = reader
-        .lines()
-        .take(res.0 * res.1)
-        .map(|l: Result<String, _>| l.unwrap().trim().parse::<f32>().unwrap())
-        .collect();
-    let x = Tensor::<MyAutodiff, 3>::from_floats(
-        burn::tensor::TensorData::new(vals, [1, res.0, res.1]),
-        &device,
-    );
-
-    println!("training finished, plotting");
-    let before = x.clone().squeeze::<2>().inner();
-    plot_heatmap(before, "before.png");
-
-    let noised = x.clone()  * 0.85;
-    let noised = noised.squeeze::<2>().inner();
-    plot_heatmap(noised, "noised.png");
-
-    let sample: Tensor<MyAutodiff, 3> = model.unnoise_data(x);
-    let sample = sample.squeeze::<2>();
-
-    let sample_inner = sample.inner(); 
-    plot_heatmap(sample_inner, &format!("diffused_{}.png",n_timesteps));
 }
