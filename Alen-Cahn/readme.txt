@@ -1,0 +1,2 @@
+To run this the user uses left mouse click to draw over the canvas. After they have finished drawing the desired initial state they close the window and
+an operator split Allen-Cahn will be solved. Then it will animate the solution giving the users a fun little movie.
