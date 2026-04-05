@@ -23,3 +23,9 @@ target
 **/*.toc
 **/*.synctex.gz
 presentation/*.out
+
+# SvelteKit / Node
+bh-quantum-annealing-app/node_modules
+bh-quantum-annealing-app/build
+bh-quantum-annealing-app/.svelte-kit
+bh-quantum-annealing-app/package-lock.json
