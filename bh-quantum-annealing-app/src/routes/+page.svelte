@@ -1,7 +1,9 @@
 <script lang="ts">
+  import 'katex/dist/katex.min.css';
+  import { Katex } from 'svelte-katex';
   import { onMount } from "svelte";
 
-  const FIXED_SYSTEM_SIZE = 32;
+  const FIXED_SYSTEM_SIZE =32;
   const FIXED_DOMAIN_DISPLAY = "4π";
   const FIXED_QUBO_BITS = 3;
   const MIN_COEFF = -10;
