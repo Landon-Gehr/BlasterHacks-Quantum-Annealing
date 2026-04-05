@@ -15,18 +15,19 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1180.0, 760.0])
             .with_min_inner_size([900.0, 620.0])
-            .with_title("BlasterHacks Quantum Annealing UI"),
+            .with_title("BlasterHacks: Quantum Annealing"),
         ..Default::default()
     };
 
     eframe::run_native(
-        "BlasterHacks Quantum Annealing UI",
+        "BlasterHacks: Quantum Annealing",
         options,
         Box::new(|cc| Ok(Box::new(QuantumUiApp::new(cc)))),
     )
 }
 
 struct QuantumUiApp {
+    active_tab: AppTab,
     coeff_sin_x: f64,
     coeff_sin_y: f64,
     coeff_cos_x: f64,
@@ -42,7 +43,12 @@ struct QuantumUiApp {
 struct PreviewData {
     valid: bool,
     summary: String,
-    qubo_dimension: usize,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AppTab {
+    Background,
+    Setup,
 }
 
 /// Implementation of the main application UI for the quantum annealing preview.
@@ -72,6 +78,7 @@ impl QuantumUiApp {
         cc.egui_ctx.set_style(style);
 
         let mut app = Self {
+            active_tab: AppTab::Setup,
             coeff_sin_x: 1.0,
             coeff_sin_y: 1.0,
             coeff_cos_x: 1.0,
@@ -87,6 +94,7 @@ impl QuantumUiApp {
     }
 
     fn load_demo_system(&mut self) {
+        // default vals
         self.coeff_sin_x = 1.0;
         self.coeff_sin_y = 1.0;
         self.coeff_cos_x = 1.0;
@@ -131,7 +139,6 @@ impl QuantumUiApp {
                 n = FIXED_SYSTEM_SIZE,
                 qubo_dimension = qubo_dimension,
             ),
-            qubo_dimension,
         };
         self.status =
             "Preview generated. The next step is wiring this action into qubo::compute_qubo."
@@ -146,50 +153,84 @@ impl QuantumUiApp {
     }
 
     fn continuous_problem_editor(&mut self, ui: &mut egui::Ui) {
-        ui.label(RichText::new("Poisson problem").strong().size(18.0));
+        ui.label(RichText::new("Poisson Setup").strong().size(24.0));
         ui.add_space(4.0);
-        ui.monospace(format!(
-            "Domain: Ω = (0, {FIXED_DOMAIN_DISPLAY}) × (0, {FIXED_DOMAIN_DISPLAY})"
+        ui.label(format!(
+            "Fixed domain Ω = (0, {FIXED_DOMAIN_DISPLAY}) × (0, {FIXED_DOMAIN_DISPLAY}), fixed n = {FIXED_SYSTEM_SIZE}"
         ));
 
         ui.add_space(8.0);
-        ui.label("Forcing function");
-        ui.label("Each coefficient is editable in-place and constrained to [-10, 10].");
-        ui.add_space(6.0);
-        ui.horizontal_wrapped(|ui| {
-            ui.label("f(x, y) =");
-            coefficient_box(ui, &mut self.coeff_sin_x);
-            ui.label("sin(x) +");
-            coefficient_box(ui, &mut self.coeff_sin_y);
-            ui.label("sin(y) +");
-            coefficient_box(ui, &mut self.coeff_cos_x);
-            ui.label("cos(x) +");
-            coefficient_box(ui, &mut self.coeff_cos_y);
-            ui.label("cos(y) +");
-            coefficient_box(ui, &mut self.coeff_sin_xy);
-            ui.label("sin(x)sin(y) +");
-            coefficient_box(ui, &mut self.coeff_cos_xy);
-            ui.label("cos(x)cos(y)");
+        ui.group(|ui| {
+            ui.label(RichText::new("Forcing Function").strong());
+            ui.label("Edit coefficients in-place within [-10, 10].");
+            ui.add_space(6.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.label("f(x, y) =");
+                coefficient_box(ui, &mut self.coeff_sin_x);
+                ui.label("sin(x) +");
+                coefficient_box(ui, &mut self.coeff_sin_y);
+                ui.label("sin(y) +");
+                coefficient_box(ui, &mut self.coeff_cos_x);
+                ui.label("cos(x) +");
+                coefficient_box(ui, &mut self.coeff_cos_y);
+                ui.label("cos(y) +");
+                coefficient_box(ui, &mut self.coeff_sin_xy);
+                ui.label("sin(x)sin(y) +");
+                coefficient_box(ui, &mut self.coeff_cos_xy);
+                ui.label("cos(x)cos(y)");
+            });
         });
 
         ui.add_space(8.0);
-        ui.label("Boundary data");
+        ui.group(|ui| {
+            ui.label(RichText::new("Boundary Function").strong());
+            ui.add_space(6.0);
+            egui::Grid::new("boundary_grid")
+                .num_columns(2)
+                .spacing([8.0, 8.0])
+                .show(ui, |ui| {
+                    ui.label("g on ∂Ω");
+                    ui.add_sized([220.0, 28.0], TextEdit::singleline(&mut self.g));
+                    ui.end_row();
+                });
+        });
+    }
+
+    fn background_page(&self, ui: &mut egui::Ui) {
+        ui.label(RichText::new("Background").strong().size(24.0));
         ui.add_space(8.0);
-        egui::Grid::new("boundary_grid")
-            .num_columns(2)
-            .spacing([8.0, 8.0])
-            .show(ui, |ui| {
-                ui.label("g on ∂Ω");
-                ui.add_sized([180.0, 28.0], TextEdit::singleline(&mut self.g));
-                ui.end_row();
-            });
+
+        ui.group(|ui| {
+            ui.label(RichText::new("Model Problem").strong());
+            ui.monospace(format!(
+                "Ω = (0, {d}) × (0, {d})\n-Δu(x, y) = f(x, y) in Ω\nu(x, y) = g on ∂Ω",
+                d = FIXED_DOMAIN_DISPLAY
+            ));
+        });
+
+        ui.add_space(10.0);
+        ui.group(|ui| {
+            ui.label(RichText::new("Forcing Function").strong());
+            ui.label("The forcing term is restricted to a trig basis so the user only adjusts coefficients.");
+            ui.monospace(
+                "f(x, y) = a sin(x) + b sin(y) + c cos(x) + d cos(y) + e sin(x)sin(y) + f cos(x)cos(y)",
+            );
+        });
+
+        ui.add_space(10.0);
+        ui.group(|ui| {
+            ui.label(RichText::new("Discretization").strong());
+            ui.label(format!(
+                "The domain and grid size are fixed in this interface: Ω = (0, 4π) × (0, 4π), n = {}.",
+                FIXED_SYSTEM_SIZE
+            ));
+            ui.label("This page is only for problem specification. The QUBO internals stay hidden.");
+        });
     }
 
     fn preview_panel(&self, ui: &mut egui::Ui) {
-        ui.label(RichText::new("QUBO preview").strong().size(20.0));
-        ui.add_space(6.0);
-        ui.label(self.status.as_str());
-        ui.add_space(12.0);
+        ui.label(RichText::new("Preview").strong().size(22.0));
+        ui.add_space(8.0);
 
         if !self.preview.valid {
             ui.colored_label(
@@ -200,7 +241,7 @@ impl QuantumUiApp {
         }
 
         ui.group(|ui| {
-            ui.label(RichText::new("Continuous model").strong());
+            ui.label(RichText::new("Problem Statement").strong());
             ui.monospace(format!(
                 "Domain:\nΩ = (0, {}) × (0, {})\n\nPDE:\n-Δu(x, y) = {} in Ω\n\nBoundary condition:\nu(x, y) = {} on ∂Ω",
                 FIXED_DOMAIN_DISPLAY,
@@ -212,20 +253,12 @@ impl QuantumUiApp {
 
         ui.add_space(10.0);
         ui.group(|ui| {
-            ui.label(RichText::new("Summary").strong());
+            ui.label(RichText::new("Discretization").strong());
             ui.monospace(self.preview.summary.as_str());
         });
 
         ui.add_space(10.0);
-        ui.group(|ui| {
-            ui.label(RichText::new("Integration notes").strong());
-            ui.label(format!(
-                "Your solver will produce a {}x{} QUBO matrix from this configuration.",
-                self.preview.qubo_dimension, self.preview.qubo_dimension
-            ));
-            ui.label("The preview is using dense helper math so the UI stays independent for now.");
-            ui.label("When you are ready, replace Generate Preview with a call into the `qubo` crate.");
-        });
+        ui.label(self.status.as_str());
     }
 
     fn forcing_expression(&self) -> String {
@@ -290,42 +323,24 @@ impl eframe::App for QuantumUiApp {
                 });
             });
 
-        egui::SidePanel::left("controls")
-            .resizable(false)
-            .default_width(300.0)
-            .frame(
-                egui::Frame::default()
-                    .fill(Color32::from_rgb(22, 28, 39))
-                    .inner_margin(egui::Margin::same(16)),
-            )
-            .show(ctx, |ui| {
-                ui.label(RichText::new("Controls").strong().size(22.0));
-                ui.add_space(8.0);
-                ui.label(format!("System size n is fixed at {}", FIXED_SYSTEM_SIZE));
-
-                ui.add_space(16.0);
-                ui.horizontal_wrapped(|ui| {
-                    if ui.button("Generate Preview").clicked() {
-                        self.generate_preview();
-                    }
-                    if ui.button("Load Demo").clicked() {
-                        self.load_demo_system();
-                    }
-                    if ui.button("Clear").clicked() {
-                        self.clear_inputs();
-                    }
+        if self.active_tab == AppTab::Setup {
+            egui::SidePanel::right("preview_panel")
+                .resizable(true)
+                .min_width(280.0)
+                .default_width(360.0)
+                .frame(
+                    egui::Frame::default()
+                        .fill(Color32::from_rgb(13, 18, 26))
+                        .inner_margin(egui::Margin::same(18)),
+                )
+                .show(ctx, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("preview_scroll")
+                        .show(ui, |ui| {
+                            self.preview_panel(ui);
+                        });
                 });
-
-                ui.add_space(12.0);
-                ui.group(|ui| {
-                    ui.label(RichText::new("What this starter includes").strong());
-                    ui.label("Fixed Poisson PDE on a fixed domain Ω = (0, 4π) × (0, 4π)");
-                    ui.label("An inline trig forcing function editor with coefficients in [-10, 10]");
-                    ui.label("A fixed discrete size n = 32");
-                    ui.label("One boundary function g on ∂Ω");
-                    ui.label("Hidden internal QUBO settings");
-                });
-            });
+        }
 
         egui::CentralPanel::default()
             .frame(
@@ -334,19 +349,35 @@ impl eframe::App for QuantumUiApp {
                     .inner_margin(egui::Margin::same(18)),
             )
             .show(ctx, |ui| {
-                ui.columns(2, |columns| {
-                    egui::ScrollArea::vertical()
-                        .id_salt("editors_scroll")
-                        .show(&mut columns[0], |ui| {
-                            self.continuous_problem_editor(ui);
-                        });
-
-                    egui::ScrollArea::vertical()
-                        .id_salt("preview_scroll")
-                        .show(&mut columns[1], |ui| {
-                            self.preview_panel(ui);
-                        });
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.active_tab, AppTab::Background, "Background");
+                    ui.selectable_value(&mut self.active_tab, AppTab::Setup, "Setup");
                 });
+                ui.add_space(14.0);
+
+                egui::ScrollArea::vertical()
+                    .id_salt("editors_scroll")
+                    .show(ui, |ui| {
+                        match self.active_tab {
+                            AppTab::Background => self.background_page(ui),
+                            AppTab::Setup => {
+                                self.continuous_problem_editor(ui);
+
+                                ui.add_space(14.0);
+                                ui.horizontal_wrapped(|ui| {
+                                    if ui.button("Generate Preview").clicked() {
+                                        self.generate_preview();
+                                    }
+                                    if ui.button("Load Demo").clicked() {
+                                        self.load_demo_system();
+                                    }
+                                    if ui.button("Clear").clicked() {
+                                        self.clear_inputs();
+                                    }
+                                });
+                            }
+                        }
+                    });
             });
     }
 }
