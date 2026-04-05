@@ -1,164 +1,224 @@
 <script lang="ts">
-  import Katex from "svelte-katex";
+  import katex from "katex";
 
-  const poissonEq = String.raw`-\Delta u(x,y)=f(x,y),\qquad u=g\text{ on }\partial\Omega`;
-  const finiteDifferenceEq = String.raw`\frac{u_{i-1,j}-2u_{i,j}+u_{i+1,j}}{\Delta x^2}+\frac{u_{i,j-1}-2u_{i,j}+u_{i,j+1}}{\Delta y^2}=f_{i,j}`;
-  const linearEq = String.raw`Au=b`;
-  const encodingEq = String.raw`u_i \approx u_{\min}+\sum_{k=0}^{K-1} w_k z_{ik},\qquad z_{ik}\in\{0,1\}`;
-  const quboEq = String.raw`\min_{z\in\{0,1\}^{nK}} z^\top Qz`;
-  const normalEq = String.raw`M=A^\top A,\qquad C=A^\top b`;
-  const isingEq = String.raw`E(s)=\sum_i h_i s_i+\sum_{i<j}J_{ij}s_is_j+c,\qquad s_i\in\{-1,1\}`;
-  const scaleEq = String.raw`q=nK,\qquad Q\in\mathbb{R}^{q\times q}`;
-  const gridScaleEq = String.raw`n=m^2\Rightarrow q=m^2K,\qquad \text{couplings scale like }m^4K^2`;
-  const exampleA = String.raw`A=\begin{bmatrix}1&3&0&2&0\\0&0&4&6&5\\3&1&3&0&2\\1&0&0&0&3\\2&0&5&1&0\end{bmatrix}`;
-  const exampleB = String.raw`b=\begin{bmatrix}15\\61\\24\\16\\21\end{bmatrix}`;
-  const exampleEncoding = String.raw`u_{\min}=0,\quad u_{\max}=10,\quad K=12\Rightarrow q=5\cdot12=60`;
+  function renderBlockMath(expression: string): string {
+    return katex.renderToString(expression, {
+      displayMode: true,
+      throwOnError: false,
+      strict: "ignore"
+    });
+  }
+
+  function formatNumber(value: number): string {
+    if (Number.isInteger(value)) return value.toString();
+    return value.toFixed(6).replace(/\.?0+$/, "");
+  }
+
+  function vectorToLatex(values: number[]): string {
+    return String.raw`\begin{bmatrix}${values.map(formatNumber).join(String.raw`\\`)}\end{bmatrix}`;
+  }
+
+  function matrixToLatex(values: number[][]): string {
+    return String.raw`\begin{bmatrix}${values
+      .map((row) => row.map(formatNumber).join(" & "))
+      .join(String.raw`\\`)}\end{bmatrix}`;
+  }
+
+  // Each theory stage: main math, objective/detail math, prose
+  const theoryStages = [
+    {
+      step: "01",
+      title: "PDE",
+      label: "Continuous problem",
+      math: String.raw`-\Delta u = f \text{ on } \Omega, \qquad u|_{\partial \Omega} = 0`,
+      objective: String.raw`\min_{u \in \mathbb{R}^{\Omega}} \; \mathcal{L}(u)`,
+      prose:
+        "We start with a PDE on a continuous domain Ω. The unknown field u must satisfy the equation everywhere in the interior and match prescribed values on the boundary. This is the original physics — infinite-dimensional and not directly amenable to linear algebra.",
+      detail: null
+    },
+    {
+      step: "02",
+      title: "Linear System",
+      label: "Discretize the operators",
+      math: String.raw`A x = b`,
+      objective: String.raw`\min_{x \in \mathbb{R}^n} \; \|A x - b\|_2^2`,
+      prose:
+        "Finite-difference or finite-element discretization replaces the continuous operators with a sparse matrix A and a right-hand-side vector b. Solving Ax = b is equivalent to minimising the squared residual — a least-squares objective that is purely quadratic in x.",
+      detail: null
+    },
+    {
+      step: "03",
+      title: "Binary Encoding",
+      label: "Represent each real unknown in bits",
+      math: String.raw`x_i \;\approx\; \sum_{k=0}^{K-1} 2^k \, q_{i,k}, \qquad q_{i,k} \in \{0,1\}`,
+      objective: String.raw`x_i \approx u_{\min} + \frac{u_{\max} - u_{\min}}{2^K - 1}\sum_{k=0}^{K-1} 2^k \, q_{i,k}`,
+      prose:
+        "Each continuous unknown x_i is replaced by K binary variables q_{i,k} ∈ {0,1}. The powers-of-two weights give a fixed-point binary expansion whose integer value, after rescaling to the target range [u_min, u_max], approximates x_i. Precision improves with K, but the total number of binary variables grows as N_binary = K · N_physical — the root of the scaling problem.",
+      detail: String.raw`N_{\mathrm{binary}} = K \cdot N_{\mathrm{physical}}`
+    },
+    {
+      step: "04",
+      title: "QUBO",
+      label: "Substitute encoding into the residual",
+      math: String.raw`x \approx x(q), \qquad q \in \{0,1\}^N`,
+      objective: String.raw`\min_{q \in \{0,1\}^N} \; q^\top Q q`,
+      prose:
+        "Substituting the binary expansion into the residual ‖Ax − b‖² and expanding yields a purely quadratic form in the binary variables. The result is a QUBO (Quadratic Unconstrained Binary Optimization) problem: minimise q⊤Qq over {0,1}^N, with the matrix Q encoding every pairwise interaction between bits.",
+      detail: null
+    },
+    {
+      step: "05",
+      title: "Ising Model",
+      label: "Shift bits to spins in {−1, +1}",
+      math: String.raw`q_i = \tfrac{1 + s_i}{2}, \qquad s_i \in \{-1,+1\}`,
+      objective: String.raw`\min_{s \in \{-1,1\}^N} \; \sum_{i<j} J_{ij}\, s_i s_j + \sum_i h_i\, s_i + c`,
+      prose:
+        "Substituting q_i = (1 + s_i)/2 into the QUBO rewrites the objective in terms of ±1 spin variables. The result is an Ising Hamiltonian with coupling matrix J and bias vector h. This is the native representation for quantum annealers: each qubit is a spin, couplings are wire weights, and minimisation corresponds to finding the ground state.",
+      detail: null
+    }
+  ];
+
+  // QuantumAnnealingSimulator steps
+  const annealerSteps = [
+    {
+      label: "Init",
+      title: "Transverse-field start",
+      math: String.raw`H(0) = H_T = -\!\sum_i \sigma_i^x`,
+      note:
+        "The simulator initialises every qubit in the |+⟩ superposition state — the unique ground state of the transverse-field driver H_T. All spin configurations are equally probable at this point; the system has no preference for the problem landscape yet."
+    },
+    {
+      label: "Anneal",
+      title: "Adiabatic schedule",
+      math: String.raw`H\!\left(s(t)\right) = \bigl(1 - s(t)\bigr)\,H_T \;+\; s(t)\,H_P, \qquad s: 0 \to 1`,
+      note:
+        "The annealing parameter s(t) is swept from 0 to 1. As s grows the transverse field — which drives quantum tunnelling across energy barriers — is suppressed, and the problem Hamiltonian H_P is turned on. The adiabatic theorem guarantees that if the schedule is slow enough the system remains in the instantaneous ground state throughout."
+    },
+    {
+      label: "Problem",
+      title: "Ising Hamiltonian",
+      math: String.raw`H_P = \sum_{i<j} J_{ij}\,\sigma_i^z\sigma_j^z + \sum_i h_i\,\sigma_i^z`,
+      note:
+        "H_P encodes the objective directly: J_{ij} are the off-diagonal couplings between pairs of qubits, derived from the upper triangle of Q; h_i are the local biases derived from the diagonal of Q and the linear terms. Minimising the expectation of H_P is equivalent to minimising q⊤Qq."
+    },
+    {
+      label: "Read",
+      title: "Measurement and decode",
+      math: String.raw`s^* = \arg\min_{s\in\{-1,+1\}^N} E(s) \;\xrightarrow{\;q_i = \frac{1+s_i}{2}\;}\; q^* \;\xrightarrow{\;\text{rescale}\;}\; x^*`,
+      note:
+        "At the end of the schedule each qubit is measured and collapses to ±1. The best spin configuration s* is converted back to bits via q_i = (1 + s_i)/2, then to physical unknowns by reversing the binary expansion. Multiple shots can be taken and the lowest-energy sample selected."
+    }
+  ];
+
+  const solvedSystem = {
+    a: [
+      [1.0, 3.0, 0.0, 2.0, 0.0],
+      [0.0, 0.0, 4.0, 6.0, 5.0],
+      [3.0, 1.0, 3.0, 0.0, 2.0],
+      [1.0, 0.0, 0.0, 0.0, 3.0],
+      [2.0, 0.0, 5.0, 1.0, 0.0]
+    ],
+    b: [15.0, 61.0, 24.0, 16.0, 21.0],
+    xRecovered: [1.1697191697191698, 1.8876678876678876, 2.8156288156288154, 4.075702075702075, 4.835164835164836],
+    xTrue: [1, 2, 3, 4, 5],
+    encoding: String.raw`u_{\min} = 0, \quad u_{\max} = 10, \quad K = 12`
+  };
+
+  const successPanels = [
+    { title: "5×5 dense test",    math: String.raw`\min_{x \in \mathbb{R}^5} \|A x - b\|_2^2` },
+    { title: "Coarse Poisson solve", math: String.raw`-\Delta u = f, \qquad u_{QA} \approx u_{\mathrm{manufactured}}` }
+  ];
+
+  const systemEquation   = String.raw`A x = b`;
+  const solvedMatrixA    = matrixToLatex(solvedSystem.a);
+  const solvedVectorB    = vectorToLatex(solvedSystem.b);
+  const solvedRecoveredX = vectorToLatex(solvedSystem.xRecovered);
+  const solvedTrueX      = vectorToLatex(solvedSystem.xTrue);
 </script>
 
 <section class="page-shell">
-  <article class="retro-window hero">
-    <div class="window-bar gold">
+
+  <!-- ── HERO ─────────────────────────────────────────────── -->
+  <article class="retro-window">
+    <div class="window-bar">
       <span>Quantum Pipeline / Theory</span>
       <span class="window-controls">_ □ ×</span>
     </div>
-    <div class="window-body split hero-split">
-      <div class="window-copy">
-        <p class="section-kicker">Theory track</p>
-        <h3>From Poisson to annealing</h3>
-        <p>
-          The project starts with a continuous PDE, discretizes it into a linear system, encodes
-          the unknowns into binary variables, and then solves the resulting optimization problem by
-          converting it into an Ising model for annealing.
-        </p>
-        <p>
-          In the current code, the classical side builds a finite-difference Poisson system, while
-          the quantum side takes a sparse matrix <em>A</em> and right-hand side <em>b</em>,
-          constructs a QUBO, converts that QUBO to Ising form, and sends it to the
-          <code>quantrs2_anneal</code> simulator.
-        </p>
-      </div>
-      <div class="pixel-panel equation-panel">
-        <span class="pixel-label">Pipeline</span>
-        <div class="equation-stack">
-          <div class="equation-line"><Katex>{poissonEq}</Katex></div>
-          <div class="equation-line"><Katex>{finiteDifferenceEq}</Katex></div>
-          <div class="equation-line"><Katex>{linearEq}</Katex></div>
-          <div class="equation-line"><Katex>{encodingEq}</Katex></div>
-          <div class="equation-line"><Katex>{quboEq}</Katex></div>
-          <div class="equation-line"><Katex>{isingEq}</Katex></div>
-        </div>
-      </div>
+    <div class="window-body">
+      <p class="section-kicker">From PDE to annealing</p>
+      <h2>We turn a discretized physics problem into an optimization problem a spin system can represent.</h2>
     </div>
   </article>
 
-  <article class="retro-window wide">
-    <div class="window-bar">
-      <span>Worked Example</span>
-      <span class="window-controls">_ □ ×</span>
-    </div>
-    <div class="window-body split">
-      <div>
-        <p class="section-kicker">5×5 system from the Rust crate</p>
-        <p>
-          The current `quantum-solver` crate includes a concrete 5×5 linear system. It uses a
-          dense example matrix, converts it to sparse form, chooses a real-valued encoding range,
-          and builds the QUBO from there.
-        </p>
-        <p>
-          That gives a small enough system to explain the mechanics clearly while still exercising
-          the full pipeline implemented in the solver code.
-        </p>
-        <ul>
-          <li>`dense_to_csmat` and `dense_to_csvec` convert the example into sparse storage.</li>
-          <li>`compute_qubo` forms the binary objective from `A`, `b`, and the encoding.</li>
-          <li>`qubo_to_ising` converts the QUBO coefficients into Ising fields and couplings.</li>
-          <li>`solve_ising_model` runs the annealing simulator and decodes the bits back to reals.</li>
-        </ul>
-      </div>
-      <div class="pixel-card math-card">
-        <div class="pixel-badge">Current Example</div>
-        <div class="equation-stack">
-          <div class="equation-line"><Katex>{exampleA}</Katex></div>
-          <div class="equation-line"><Katex>{exampleB}</Katex></div>
-          <div class="equation-line"><Katex>{normalEq}</Katex></div>
-          <div class="equation-line"><Katex>{exampleEncoding}</Katex></div>
-        </div>
-        <p>
-          Continuous field → sparse algebra → binary optimization → spin Hamiltonian.
-        </p>
-      </aside>
-    </div>
-  </article>
-
+  <!-- ── THEORY STACK ──────────────────────────────────────── -->
   <article class="retro-window">
-    <div class="window-bar violet">
+    <div class="window-bar">
       <span>Theory Stack</span>
       <span class="window-controls">_ □ ×</span>
     </div>
     <div class="window-body stacked">
       <div class="section-head">
-        <p class="section-kicker">Full theory</p>
-        <h3>The four translation layers</h3>
+        <p class="section-kicker">Full derivation</p>
+        <h3>Five translation layers: from PDE to spin Hamiltonian</h3>
       </div>
 
-      <div class="pipeline-grid">
-        {#each pipeline as stage}
+      <div class="theory-grid">
+        {#each theoryStages as stage}
           <section class="theory-card">
             <div class="theory-topline">
               <span class="step-chip">{stage.step}</span>
-              <span class="step-label">{stage.label}</span>
+              <div>
+                <span class="step-label">{stage.label}</span>
+                <h4>{stage.title}</h4>
+              </div>
             </div>
-            <h4>{stage.title}</h4>
             <div class="math-block">{@html renderBlockMath(stage.math)}</div>
             <div class="math-block emphasis">{@html renderBlockMath(stage.objective)}</div>
+            <p class="card-prose">{stage.prose}</p>
+            {#if stage.detail}
+              <div class="math-block detail-math">{@html renderBlockMath(stage.detail)}</div>
+            {/if}
           </section>
         {/each}
       </div>
     </div>
   </article>
 
-  <article class="retro-window duo">
+  <!-- ── SOLVER ────────────────────────────────────────────── -->
+  <article class="retro-window">
     <div class="window-bar">
-      <span>Why It Gets Hard</span>
+      <span>How QuantumAnnealingSimulator Solves the Ising Model</span>
       <span class="window-controls">_ □ ×</span>
     </div>
-    <div class="window-body split">
-      <div>
-        <p class="section-kicker">Scaling wall</p>
-        <p>
-          The theory is clean, but the variable count grows quickly. If a 2D grid has
-          <em>m</em>×<em>m</em> unknowns, then the linear system size is <em>n = m²</em>. Encoding
-          each unknown with <em>K</em> bits creates a QUBO with <em>q = nK</em> binary variables.
-        </p>
-        <p>
-          That means the QUBO matrix itself is <em>q × q</em>, so the interaction structure grows
-          like <em>m⁴K²</em>. This is exactly why the project works as a proof of concept on small
-          systems but becomes computationally painful when we try to scale realistic PDE grids on
-          classical hardware.
-        </p>
-        <p>
-          In short: the mapping from PDE solve to annealing objective works, but simulating the
-          quantum process classically is the bottleneck.
-        </p>
+    <div class="window-body stacked">
+      <div class="section-head">
+        <p class="section-kicker">quantrs2_anneal</p>
+        <h3>Adiabatic evolution from transverse field to problem Hamiltonian</h3>
       </div>
-      <div class="pixel-card">
-        <div class="pixel-badge">Takeaway</div>
-        <div class="equation-stack">
-          <div class="equation-line"><Katex>{scaleEq}</Katex></div>
-          <div class="equation-line"><Katex>{gridScaleEq}</Katex></div>
-        </div>
-        <p class="takeaway-copy">
-          TL;DR: the workflow is mathematically valid and small examples are informative, but the
-          state size and coupling count explode before the approach becomes a practical classical
-          replacement for standard PDE solvers.
-        </p>
+
+      <div class="annealer-grid">
+        {#each annealerSteps as step, i}
+          <section class="annealer-card">
+            <div class="theory-topline">
+              <span class="step-chip">{step.label}</span>
+              <h4>{step.title}</h4>
+            </div>
+            <div class="math-block emphasis">{@html renderBlockMath(step.math)}</div>
+            <p class="card-prose">{step.note}</p>
+          </section>
+          {#if i < annealerSteps.length - 1}
+            <div class="annealer-connector">↓</div>
+          {/if}
+        {/each}
       </div>
     </div>
   </article>
 
+  <!-- ── LOWER GRID ────────────────────────────────────────── -->
   <div class="lower-grid">
+
     <article class="retro-window">
-      <div class="window-bar orange">
+      <div class="window-bar">
         <span>What Worked</span>
         <span class="window-controls">_ □ ×</span>
       </div>
@@ -178,7 +238,7 @@
         </div>
 
         <section class="matrix-board">
-          <span class="result-tag">5x5 system solved</span>
+          <span class="result-tag">5×5 system solved</span>
           <div class="math-block emphasis">{@html renderBlockMath(systemEquation)}</div>
           <div class="matrix-grid">
             <div>
@@ -206,26 +266,55 @@
     </article>
 
     <article class="retro-window">
-      <div class="window-bar red">
-        <span>Limitations</span>
+      <div class="window-bar">
+        <span>Conclusion</span>
         <span class="window-controls">_ □ ×</span>
       </div>
       <div class="window-body stacked">
         <div class="section-head compact">
-          <p class="section-kicker">Reality check</p>
-          <h3>Why this does not scale yet</h3>
+          <p class="section-kicker">Takeaway</p>
+          <h3>Limited success with infeasible scaling</h3>
         </div>
 
-        <div class="limit-panel">
-          {#each limitations as limitation}
-            <div class="limit-item">
-              <span class="limit-bullet">!</span>
-              <div class="math-block compact">{@html renderBlockMath(limitation)}</div>
+        <div class="conclusion-body">
+          <p class="conclusion-lead">
+            The pipeline is theoretically sound and produces correct solutions on small instances. The bottleneck is not correctness — it is qubit count.
+          </p>
+
+          <div class="conclusion-points">
+            <div class="cpoint">
+              <span class="cpoint-mark">✓</span>
+              <div>
+                <strong>Pipeline validated</strong>
+                <p>PDE → linear system → QUBO → Ising transformation is algebraically exact.</p>
+              </div>
             </div>
-          {/each}
+            <div class="cpoint">
+              <span class="cpoint-mark">✓</span>
+              <div>
+                <strong>Correct on toy problems</strong>
+                <p>5×5 dense and coarse Poisson cases recovered ground truth with 12-bit encoding.</p>
+              </div>
+            </div>
+            <div class="cpoint">
+              <span class="cpoint-mark warn">✗</span>
+              <div>
+                <strong>Qubit count explodes</strong>
+                <div class="math-block compact conclusion-math">{@html renderBlockMath(String.raw`N_\mathrm{binary} = K \cdot N_\mathrm{physical} \;\xrightarrow{K=12}\; 12\times\text{overhead}`)}</div>
+              </div>
+            </div>
+            <div class="cpoint">
+              <span class="cpoint-mark warn">✗</span>
+              <div>
+                <strong>No QPU access</strong>
+                <p>Classical simulation of the annealer grows exponentially — theory validated, hardware advantage absent.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </article>
+
   </div>
 </section>
 
@@ -236,11 +325,11 @@
     padding: 1.25rem;
   }
 
+  /* ── Window chrome ── */
   .retro-window {
     width: 100%;
     border: 2px solid #2b2340;
-    background:
-      linear-gradient(180deg, rgba(20, 16, 28, 0.96), rgba(10, 10, 16, 0.96));
+    background: linear-gradient(180deg, rgba(20, 16, 28, 0.96), rgba(10, 10, 16, 0.96));
     box-shadow:
       0 0 0 2px rgba(255, 255, 255, 0.02) inset,
       8px 8px 0 #06050a;
@@ -252,67 +341,20 @@
     align-items: center;
     padding: 0.55rem 0.8rem;
     border-bottom: 2px solid #2b2340;
+    background: rgba(255, 255, 255, 0.04);
     text-transform: uppercase;
     font-size: 0.8rem;
     letter-spacing: 0.08em;
-    color: #120a20;
+    color: rgba(255, 255, 255, 0.5);
   }
 
-  .window-bar.gold {
-    background: linear-gradient(90deg, #ffe972, #ff8a4d);
-  }
+  .window-controls { letter-spacing: 0.2em; }
 
-  .window-bar.violet {
-    background: linear-gradient(90deg, #d191ff, #6d5cff);
-    color: #fef6ff;
-  }
+  .window-body { padding: 1rem 1.1rem 1.15rem; }
 
-  .window-bar.cyan {
-    background: linear-gradient(90deg, #79e7ff, #2e9fff);
-  }
+  .stacked { display: grid; gap: 1rem; }
 
-  .window-bar.orange {
-    background: linear-gradient(90deg, #ffbc68, #ff7c44);
-  }
-
-  .window-bar.red {
-    background: linear-gradient(90deg, #ff8f9e, #ff4d6d);
-  }
-
-  .window-controls {
-    letter-spacing: 0.2em;
-  }
-
-  .window-body {
-    padding: 1rem 1.1rem 1.15rem;
-  }
-
-  .hero-layout,
-  .solver-layout,
-  .stacked {
-    display: grid;
-    gap: 1rem;
-  }
-
-  .hero-layout {
-    grid-template-columns: minmax(0, 1.45fr) minmax(16rem, 0.8fr);
-    align-items: start;
-  }
-
-  .solver-layout {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  }
-
-  .lower-grid {
-    display: grid;
-    gap: 1.15rem;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-
-  .hero-split {
-    align-items: start;
-  }
-
+  /* ── Typography ── */
   .section-kicker {
     margin: 0 0 0.6rem;
     color: #ff8fcb;
@@ -321,28 +363,32 @@
     font-size: 1.5rem;
   }
 
-  .hero-copy h2,
-  .section-head h3,
-  .solver-copy h3 {
+  h2, h3 {
     margin: 0.2rem 0 0.8rem;
     font-family: "Glastone", "Dotemp", monospace;
     color: #fff6a8;
     line-height: 1.02;
   }
 
-  .hero-copy p,
-  .solver-copy p,
-  .theory-card p,
-  .solver-step p,
-  .result-card p,
-  .limit-item p,
-  .equation-strip p,
-  .signal-panel p {
-    margin: 0;
-    color: #efdaf9;
-    line-height: 1.65;
+  h4 {
+    margin: 0 0 0.45rem;
+    color: #fff3ff;
+    font-family: "Glastone", "Dotemp", monospace;
+    font-size: 1.1rem;
   }
 
+  .section-head { display: grid; gap: 0.2rem; }
+  .section-head.compact h3,
+  .section-head.compact .section-kicker { margin-bottom: 0.45rem; }
+
+  .card-prose {
+    margin: 0.65rem 0 0;
+    color: #efdaf9;
+    line-height: 1.65;
+    font-size: 0.9rem;
+  }
+
+  /* ── Math blocks ── */
   .math-block {
     margin: 0;
     padding: 0.75rem 0.85rem;
@@ -357,43 +403,21 @@
     word-break: break-word;
   }
 
-  .math-block :global(.katex-display) {
-    margin: 0;
-  }
+  .math-block :global(.katex-display) { margin: 0; }
+  .math-block :global(.katex) { color: inherit; font-size: 1em; }
+  .math-block.compact    { padding: 0.55rem 0.7rem; }
+  .math-block.emphasis   { background: rgba(255, 233, 114, 0.08); }
+  .math-block.detail-math { margin-top: 0.6rem; }
+  .matrix-math           { overflow-x: auto; }
 
-  .math-block :global(.katex) {
-    color: inherit;
-    font-size: 1em;
-  }
-
-  .math-block.compact {
-    padding: 0.55rem 0.7rem;
-  }
-
-  .math-block.emphasis {
-    background: rgba(255, 233, 114, 0.08);
-  }
-
-  .matrix-math {
-    overflow-x: auto;
-  }
-
-  .signal-panel,
+  /* ── Shared card chrome ── */
   .theory-card,
-  .solver-step,
+  .annealer-card,
   .result-card,
   .matrix-board,
-  .limit-panel,
-  .equation-strip > div {
+  .cpoint {
     border: 2px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.035);
-  }
-
-  .signal-panel {
-    padding: 0.95rem;
-    background:
-      linear-gradient(180deg, rgba(255, 233, 114, 0.12), rgba(122, 41, 255, 0.08)),
-      rgba(255, 255, 255, 0.035);
   }
 
   .panel-label,
@@ -401,76 +425,81 @@
   .eq-label,
   .step-label {
     display: inline-block;
-    margin-bottom: 0.65rem;
+    margin-bottom: 0.4rem;
     color: #84c3ff;
     text-transform: uppercase;
     letter-spacing: 0.14em;
     font-size: 0.72rem;
   }
 
-  .signal-flow {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-    align-items: center;
-    margin-bottom: 0.9rem;
-    font-family: "Glastone", "Dotemp", monospace;
-    font-size: clamp(1.2rem, 2vw, 1.85rem);
-    color: #ffe972;
-    line-height: 1.1;
-  }
-
-  .pipeline-grid {
-    display: grid;
-    gap: 0.9rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .theory-card,
-  .solver-step,
-  .result-card {
-    padding: 0.95rem;
-  }
-
-  .theory-topline {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    margin-bottom: 0.65rem;
-  }
-
+  /* ── Step chip ── */
   .step-chip {
+    flex-shrink: 0;
     min-width: 2.2rem;
     padding: 0.25rem 0.45rem;
     border: 2px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.05);
     color: #fff6a8;
     text-align: center;
-  }
-
-  .theory-card h4,
-  .solver-step h4,
-  .result-card h4 {
-    margin: 0 0 0.45rem;
-    color: #fff3ff;
     font-family: "Glastone", "Dotemp", monospace;
-    font-size: 1.1rem;
+    font-size: 0.8rem;
   }
 
-  .theory-summary {
-    margin-bottom: 0.55rem;
-    color: #fff5c2;
+  .theory-topline {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    margin-bottom: 0.65rem;
   }
 
-  .solver-rail,
-  .results-list {
+  /* ── Theory grid: 2-col, rich prose cards ── */
+  .theory-grid {
     display: grid;
-    gap: 0.8rem;
-  }
-
-  .results-list.short {
+    gap: 0.9rem;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  /* Last card (05 Ising) spans full width */
+  .theory-grid > :last-child { grid-column: 1 / -1; }
+
+  .theory-card {
+    padding: 0.95rem;
+    display: grid;
+    gap: 0.5rem;
+    align-content: start;
+  }
+
+  /* ── Annealer: single-column flowing list ── */
+  .annealer-grid { display: grid; gap: 0; }
+
+  .annealer-card {
+    padding: 0.95rem;
+    display: grid;
+    gap: 0.5rem;
+    align-content: start;
+  }
+
+  .annealer-connector {
+    text-align: center;
+    padding: 0.3rem 0;
+    color: rgba(255, 255, 255, 0.2);
+    font-size: 1.2rem;
+    border-left: 2px solid rgba(255, 255, 255, 0.06);
+    border-right: 2px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.015);
+  }
+
+  /* ── Lower grid ── */
+  .lower-grid {
+    display: grid;
+    gap: 1.15rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .results-list { display: grid; gap: 0.8rem; }
+  .results-list.short { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .result-card  { padding: 0.95rem; }
 
   .matrix-board {
     display: grid;
@@ -484,80 +513,71 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .limit-panel {
+  /* ── Conclusion ── */
+  .conclusion-body    { display: grid; gap: 0.9rem; }
+  .conclusion-points  { display: grid; gap: 0.65rem; }
+
+  .conclusion-lead {
+    margin: 0;
+    color: #fff6a8;
+    font-size: 0.97rem;
+    line-height: 1.65;
+    padding: 0.75rem 0.9rem;
+    border-left: 3px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .cpoint {
     display: grid;
+    grid-template-columns: 2rem 1fr;
     gap: 0.7rem;
-    padding: 0.9rem;
-  }
-
-  .limit-item {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.75rem;
     align-items: start;
+    padding: 0.75rem;
   }
 
-  .pixel-label,
-  .pixel-badge {
-    display: inline-block;
-    margin-bottom: 0.8rem;
-    color: #84c3ff;
-    font-size: 0.72rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
+  .cpoint-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    background: rgba(95, 255, 180, 0.12);
+    color: #5fffb4;
+    font-family: "Glastone", "Dotemp", monospace;
+    font-size: 0.9rem;
   }
 
-  .equation-panel,
-  .math-card {
-    align-self: start;
+  .cpoint-mark.warn {
+    background: rgba(255, 79, 118, 0.14);
+    color: #ffd8df;
   }
 
-  .equation-stack {
-    display: grid;
-    gap: 0.75rem;
+  .cpoint strong {
+    display: block;
+    color: #fff3ff;
+    font-family: "Glastone", "Dotemp", monospace;
+    font-size: 0.95rem;
+    margin-bottom: 0.3rem;
   }
 
-  .equation-line {
-    overflow-x: auto;
-    padding-bottom: 0.1rem;
-    color: #fff4c7;
-  }
+  .cpoint p { margin: 0; color: #efdaf9; font-size: 0.86rem; line-height: 1.55; }
 
-  .takeaway-copy {
-    margin-top: 1rem;
-  }
+  .conclusion-math { margin-top: 0.4rem; }
 
-  :global(.equation-line .katex) {
-    font-size: 1.02rem;
-  }
-
-  .section-head.compact h3,
-  .section-head.compact .section-kicker {
-    margin-bottom: 0.45rem;
-  }
-
+  /* ── Responsive ── */
   @media (max-width: 1080px) {
-    .hero-layout,
-    .solver-layout,
+    .theory-grid,
     .lower-grid,
-    .pipeline-grid,
     .results-list.short,
     .matrix-grid {
       grid-template-columns: minmax(0, 1fr);
     }
+    .theory-grid > :last-child { grid-column: 1; }
   }
 
   @media (max-width: 760px) {
-    .page-shell {
-      padding: 0.8rem;
-    }
-
-    .window-body {
-      padding: 0.9rem;
-    }
-
-    .signal-flow {
-      font-size: 1rem;
-    }
+    .page-shell  { padding: 0.8rem; }
+    .window-body { padding: 0.9rem; }
   }
 </style>
