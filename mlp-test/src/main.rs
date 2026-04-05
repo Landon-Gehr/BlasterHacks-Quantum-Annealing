@@ -1,138 +1,188 @@
 #![recursion_limit = "256"]
 use burn::{
-    module::{Module,AutodiffModule},
     nn::{Linear, LinearConfig, Relu},
-    optim::{AdamConfig, GradientsParams, Optimizer},
+    optim::{AdamConfig, GradientsParams, Optimizer, adaptor::OptimizerAdaptor, Adam},
     prelude::*,
-    tensor::Tensor,
-    // backend::wgpu::WgpuDevice,
+    tensor::{Tensor, Distribution, backend::AutodiffBackend},
 };
-use rand::Rng;
 
-// type MyBackend = burn::backend::NdArray;
 type MyBackend = burn::backend::Wgpu;
 type MyAutodiff = burn::backend::Autodiff<MyBackend>;
 
+pub struct DiffusionModel<B: AutodiffBackend> {
+    mlp: ErrorMlp<B>,
+    t: usize,
+    device: B::Device,
+    optim: OptimizerAdaptor<Adam, ErrorMlp<B>, B>,
+    betas: Tensor<B, 1>,
+    alphas: Tensor<B, 1>,
+    alpha_bars: Tensor<B, 1>,
+    res: (usize, usize)
+}
+
+impl<B: AutodiffBackend> DiffusionModel<B> {
+    pub fn new(device: B::Device, t: usize) -> Self {
+        let mlp = ErrorMlp::<B>::new(&device);
+        let optim = AdamConfig::new().with_epsilon(1e-5).init();
+        let betas_vec: Vec<f32> = (0..t).map(|i| 1e-4 + (2e-2 - 1e-4) * i as f32 / (t - 1) as f32).collect();
+        let betas = Tensor::<B, 1>::from_floats(betas_vec.as_slice(), &device);
+        let alphas: Tensor<B, 1> = 1.0 - betas.clone();
+        let alpha_bars = alphas.clone().cumprod(0);
+        let res: (usize,usize) = (4,4); 
+        Self {
+            mlp,
+            optim,
+            device,
+            t,
+            betas,
+            alphas,
+            alpha_bars,
+            res
+        }
+    }
+
+    pub fn noise_data(&mut self, x: Tensor<B, 2>) -> (Tensor<B, 2>, Tensor<B, 1, Int>,Tensor<B, 2>) {
+        let batch_size = x.dims()[0];
+        let ts = Tensor::<B, 1>::random([batch_size],Distribution::Uniform(0.0, (self.t + 1) as f64),&self.device).floor().int();
+        let eps = Tensor::<B, 2>::random([batch_size, x.dims().len()], Distribution::Normal(0.0, 1.0), &self.device);    
+        let alpha_bars_t = self.alpha_bars.clone().select(0, ts.clone()); 
+        let x_0_coef = alpha_bars_t.clone().sqrt().reshape([batch_size, 1]);
+        let epsilon_coef = (alpha_bars_t.ones_like() - alpha_bars_t).sqrt().reshape([batch_size, 1]);
+        let x_noised = x_0_coef * x + epsilon_coef * eps.clone();
+        (x_noised, ts, eps)
+    }
+
+    pub fn unnoise_data(&self, x_t: Tensor<B, 2>) -> Tensor<B, 2> {
+        let mut x = x_t.clone();
+        let batch_size = x_t.dims()[0];
+
+        for t in (0..self.t).rev() {
+            let alpha_t: f32      = self.alphas.clone().slice([t..t+1]).into_scalar().elem();
+            let beta_t: f32       = self.betas.clone().slice([t..t+1]).into_scalar().elem();
+            let alpha_bar_t: f32  = self.alpha_bars.clone().slice([t..t+1]).into_scalar().elem();
+
+            let mean_eps_coef = (1.0 - alpha_t.clone()) / (1.0 - alpha_bar_t.clone()).sqrt(); 
+            let var_eps_coef  = 1.0 / alpha_t.clone().sqrt();           
+            let dev_eps_coef  = beta_t.sqrt();                            
+
+            let z: Tensor<B, 2> = if t > 1 {
+                Tensor::random(x.dims(), Distribution::Normal(0.0, 1.0), &self.device)
+            } else {
+                Tensor::zeros(x.dims(), &self.device)
+            };
+
+            let t_tensor = Tensor::<B, 1,  Int>::full([batch_size], t as u32, &self.device);
+            let eps_hat = self.mlp.forward(x.clone(), t_tensor);
+            x = var_eps_coef * (x - mean_eps_coef * eps_hat) + dev_eps_coef * z;
+        }
+
+        x
+    }
+
+    pub fn train(&mut self, train_data: Vec<Tensor<B, 2>>, val_data: Vec<Tensor<B, 2>>, epochs: usize) {
+        let mut best_val_loss = f32::INFINITY;
+        let mut epoch_train_loss = f32::INFINITY;
+        let mut epoch_val_loss = f32::INFINITY;
+
+        for epoch in 0..epochs {
+            println!(
+                "epoch: {}/{}, (train, val) loss: {:.7}, {:.7}",
+                epoch, epochs, epoch_train_loss, epoch_val_loss
+            );
+
+            // ============
+            //   Training
+            // ============
+            let mut batch_losses: Vec<f32> = Vec::new();
+
+            for x_0 in train_data.iter() {
+                let batch_size = x_0.dims()[0];
+                let (x_t, t_tensor, eps) = self.noise_data(x_0.clone());
+
+                let eps_hat = self.mlp.forward(x_t, t_tensor);
+                let loss = (eps_hat - eps).powf_scalar(2.0).mean();
+
+                batch_losses.push(loss.clone().into_scalar().elem());
+
+                let grads = loss.backward();
+                let grads = GradientsParams::from_grads(grads, &self.mlp);
+                self.mlp = self.optim.step(1e-5, self.mlp.clone(), grads);
+            }
+
+            epoch_train_loss = batch_losses.iter().sum::<f32>() / batch_losses.len() as f32;
+
+            // ============
+            //  Validation
+            // ============
+            let mut batch_losses: Vec<f32> = Vec::new();
+
+            for x_0 in val_data.iter() {
+                let (x_t, t_tensor, eps) = self.noise_data(x_0.clone());
+
+                // no_grad equivalent: use the inner backend directly
+                let eps_hat = self.mlp.forward(x_t, t_tensor);
+                let loss = (eps_hat - eps).powf_scalar(2.0).mean();
+
+                batch_losses.push(loss.into_scalar().elem());
+            }
+
+            epoch_val_loss = batch_losses.iter().sum::<f32>() / batch_losses.len() as f32;
+
+            // ========================
+            //  Save best model
+            // ========================
+            if epoch_val_loss < best_val_loss {
+                best_val_loss = epoch_val_loss;
+                // save model record to file
+                let recorder = burn::record::CompactRecorder::new();
+                self.mlp
+                    .clone()
+                    .save_file("model", &recorder)
+                    .expect("Failed to save model");
+                println!("saved new best model (val loss: {:.7})", best_val_loss);
+            }
+        }
+    }
+
+    pub fn inference(&self) -> Tensor<B, 2> {
+        let mut x = Tensor::<B, 2>::random([self.res.0,self.res.1],Distribution::Uniform(0.0, 1.0),&self.device);
+        let sample: Tensor::<B, 2> = self.unnoise_data(x);
+        sample
+    }
+}
+
 #[derive(Module, Debug)]
-pub struct Mlp<B: Backend> {
+pub struct ErrorMlp<B: Backend> {
     linear1: Linear<B>,
     relu: Relu,
     linear2: Linear<B>,
 }
 
-impl<B: Backend> Mlp<B> {
+impl<B: Backend> ErrorMlp<B> {
     pub fn new(device: &B::Device) -> Self {
         Self {
-            linear1: LinearConfig::new(2, 512).with_bias(true).init(device),
+            linear1: LinearConfig::new(4, 512).with_bias(true).init(device),
             relu: Relu::new(),
-            linear2: LinearConfig::new(512, 1).with_bias(true).init(device),
+            linear2: LinearConfig::new(512, 4).with_bias(true).init(device),
         }
     }
 
-    pub fn forward(&self, x: Tensor<B, 2>) -> Tensor<B, 2> {
+    pub fn forward(&self, x: Tensor<B, 2>, t: Tensor<B, 1, Int>) -> Tensor<B, 2> {
         let x = self.linear1.forward(x);
         let x = self.relu.forward(x);
         self.linear2.forward(x)
     }
 }
 
-
-// #[allow(unreachable_code)]
-// fn select_device() -> DispatchDevice {
-//     #[cfg(feature = "ndarray")]
-//     return NdArrayDevice::Cpu.into();
-
-//     #[cfg(all(feature = "tch-gpu", not(target_os = "macos")))]
-//     return LibTorchDevice::Cuda(0).into();
-
-//     #[cfg(all(feature = "tch-gpu", target_os = "macos"))]
-//     return LibTorchDevice::Mps.into();
-
-//     #[cfg(feature = "tch-cpu")]
-//     return LibTorchDevice::Cpu;
-
-//     #[cfg(any(feature = "wgpu", feature = "metal", feature = "vulkan"))]
-//     return WgpuDevice::default().into();
-
-//     #[cfg(feature = "cuda")]
-//     return CudaDevice::default().into();
-
-//     #[cfg(feature = "rocm")]
-//     return RocmDevice::default().into();
-
-//     unreachable!("At least one backend will be selected.")
-// }
-
-
 fn main() {
-    let device = <MyBackend as Backend>::Device::default();
-
-    let mut rng = rand::thread_rng();
-
-    let input_data: Vec<f32> = (0..1024 * 2)
-        .map(|_| rng.gen_range(0..2) as f32)
-        .collect();
-
-    let label_data: Vec<f32> = input_data
-        .chunks(2)
-        .map(|pair| if pair[0] != pair[1] { 1.0 } else { 0.0 })
-        .collect();
-
-    let x = Tensor::<MyAutodiff, 2>::from_floats(
-        TensorData::new(input_data.clone(), [1024, 2]),
-        &device,
-    );
-
-    let y = Tensor::<MyAutodiff, 2>::from_floats(
-        TensorData::new(label_data, [1024, 1]),
-        &device,
-    );
-
-    let mut model = Mlp::<MyAutodiff>::new(&device);
-    let mut optim = AdamConfig::new().with_epsilon(1e-5).init::<MyAutodiff, Mlp<MyAutodiff>>();
-
-    let mut avgt = std::time::Duration::from_secs(0);
-
-    let loops=5;
-    for _t in 0..loops {
-
-    let start = std::time::Instant::now();
-
-    for epoch in 0..3000 {
-        let pred = model.forward(x.clone());
-        let loss = (pred.clone() - y.clone()).powf_scalar(2.0).mean();
-
-        if epoch % 100 == 0 {
-            print!("\nEpoch {epoch:4}: loss = {:.6}", loss.clone().into_scalar());
-        }
-
-        let grads = loss.backward();
-        let grads = GradientsParams::from_grads(grads, &model);
-        model = optim.step(0.05, model, grads);
-    }
-
-    let te = start.elapsed();
-    print!("\nTraining took: {:.2?}", te);
-    avgt += te;
-    }
-
-    avgt /= loops;
-    println!("\nAVG Training Time: {:.2?}",avgt);
-
-
-    let model_infer = model.valid();
-    let test_inputs: [[f32; 2]; 4] = [
-        [0.0, 0.0],
-        [0.0, 1.0],
-        [1.0, 0.0],
-        [1.0, 1.0],
-    ];
-    let x_infer = Tensor::<MyBackend, 2>::from_floats(test_inputs, &device);
-    let preds = model_infer.forward(x_infer);
-
-    println!("\nPredictions after training:");
-    println!("[0,0] → {:.3}", preds.clone().slice([0..1]).into_data().to_vec::<f32>().unwrap()[0]);
-    println!("[0,1] → {:.3}", preds.clone().slice([1..2]).into_data().to_vec::<f32>().unwrap()[0]);
-    println!("[1,0] → {:.3}", preds.clone().slice([2..3]).into_data().to_vec::<f32>().unwrap()[0]);
-    println!("[1,1] → {:.3}", preds.slice([3..4]).into_data().to_vec::<f32>().unwrap()[0]);
+    // let device = <MyAutodiff as Backend>::Device::default();
+    // let mut model = DiffusionModel::<MyAutodiff>::new(device.clone(), 1000);
+    // let x = Tensor::<MyAutodiff, 2>::random(
+    //     [1024, 4],
+    //     Distribution::Uniform(0.0, 1.0),
+    //     &device,
+    // );
+    // model.train(x, 1000);
+    // let out = model.inference([1, 4]);
+    // println!("{:?}", out);
 }
