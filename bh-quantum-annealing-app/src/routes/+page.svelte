@@ -1,4 +1,5 @@
 <script lang="ts">
+  import "katex/dist/katex.min.css";
   import { onMount } from "svelte";
   import AppHeader from "$lib/components/AppHeader.svelte";
   import HomePage from "$lib/components/pages/HomePage.svelte";
