@@ -76,10 +76,8 @@
 </script>
 
 <section class="page-shell">
-
-  <!-- ── HERO ─────────────────────────────────────────────── -->
-  <article class="retro-window">
-    <div class="window-bar">
+  <article class="retro-window hero">
+    <div class="window-bar gold">
       <span>Quantum Pipeline / Theory</span>
       <span class="window-controls">_ □ ×</span>
     </div>
@@ -154,16 +152,15 @@
     </div>
   </article>
 
-  <!-- ── THEORY STACK ──────────────────────────────────────── -->
   <article class="retro-window">
-    <div class="window-bar">
+    <div class="window-bar violet">
       <span>Theory Stack</span>
       <span class="window-controls">_ □ ×</span>
     </div>
     <div class="window-body stacked">
       <div class="section-head">
-        <p class="section-kicker">Full derivation</p>
-        <h3>Five translation layers: from PDE to spin Hamiltonian</h3>
+        <p class="section-kicker">Full theory</p>
+        <h3>The four translation layers</h3>
       </div>
 
       <div class="pipeline-grid">
@@ -171,10 +168,7 @@
           <section class="theory-card">
             <div class="theory-topline">
               <span class="step-chip">{stage.step}</span>
-              <div>
-                <span class="step-label">{stage.label}</span>
-                <h4>{stage.title}</h4>
-              </div>
+              <span class="step-label">{stage.label}</span>
             </div>
             <h4>{stage.title}</h4>
             <p>{stage.body}</p>
@@ -185,16 +179,29 @@
     </div>
   </article>
 
-  <!-- ── SOLVER ────────────────────────────────────────────── -->
-  <article class="retro-window">
+  <article class="retro-window duo">
     <div class="window-bar">
-      <span>How QuantumAnnealingSimulator Solves the Ising Model</span>
+      <span>Why It Gets Hard</span>
       <span class="window-controls">_ □ ×</span>
     </div>
-    <div class="window-body stacked">
-      <div class="section-head">
-        <p class="section-kicker">quantrs2_anneal</p>
-        <h3>Adiabatic evolution from transverse field to problem Hamiltonian</h3>
+    <div class="window-body split">
+      <div>
+        <p class="section-kicker">Scaling wall</p>
+        <p>
+          The theory is clean, but the variable count grows quickly. If a 2D grid has
+          <em>m</em>×<em>m</em> unknowns, then the linear system size is <em>n = m²</em>. Encoding
+          each unknown with <em>K</em> bits creates a QUBO with <em>q = nK</em> binary variables.
+        </p>
+        <p>
+          That means the QUBO matrix itself is <em>q × q</em>, so the interaction structure grows
+          like <em>m⁴K²</em>. This is exactly why the project works as a proof of concept on small
+          systems but becomes computationally painful when we try to scale realistic PDE grids on
+          classical hardware.
+        </p>
+        <p>
+          In short: the mapping from PDE solve to annealing objective works, but simulating the
+          quantum process classically is the bottleneck.
+        </p>
       </div>
 
       <div class="pixel-card">
@@ -245,11 +252,11 @@
     padding: 1.25rem;
   }
 
-  /* ── Window chrome ── */
   .retro-window {
     width: 100%;
     border: 2px solid #2b2340;
-    background: linear-gradient(180deg, rgba(20, 16, 28, 0.96), rgba(10, 10, 16, 0.96));
+    background:
+      linear-gradient(180deg, rgba(20, 16, 28, 0.96), rgba(10, 10, 16, 0.96));
     box-shadow:
       0 0 0 2px rgba(255, 255, 255, 0.02) inset,
       8px 8px 0 #06050a;
@@ -286,7 +293,13 @@
   .window-controls {
     letter-spacing: 0.2em;
   }
+  .window-controls {
+    letter-spacing: 0.2em;
+  }
 
+  .window-body {
+    padding: 1rem 1.1rem 1.15rem;
+  }
   .window-body {
     padding: 1rem 1.1rem 1.15rem;
   }
@@ -306,7 +319,25 @@
     align-items: start;
   }
 
-  /* ── Typography ── */
+  .hero-layout {
+    grid-template-columns: minmax(0, 1.45fr) minmax(16rem, 0.8fr);
+    align-items: start;
+  }
+
+  .solver-layout {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .lower-grid {
+    display: grid;
+    gap: 1.15rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .hero-split {
+    align-items: start;
+  }
+
   .section-kicker {
     margin: 0 0 0.6rem;
     color: #ff8fcb;
@@ -361,17 +392,19 @@
     font-size: 0.9rem;
   }
 
-  .cpoint-mark.warn {
-    background: rgba(255, 79, 118, 0.14);
-    color: #ffd8df;
+  .equation-stack {
+    display: grid;
+    gap: 0.75rem;
   }
 
-  .cpoint strong {
-    display: block;
-    color: #fff3ff;
-    font-family: "Glastone", "Dotemp", monospace;
-    font-size: 0.95rem;
-    margin-bottom: 0.3rem;
+  .equation-line {
+    overflow-x: auto;
+    padding-bottom: 0.1rem;
+    color: #fff4c7;
+  }
+
+  .takeaway-copy {
+    margin-top: 1rem;
   }
 
   .cpoint p { margin: 0; color: #efdaf9; font-size: 0.86rem; line-height: 1.55; }
@@ -460,7 +493,6 @@
     .results-list {
       grid-template-columns: minmax(0, 1fr);
     }
-    .theory-grid > :last-child { grid-column: 1; }
   }
 
   @media (max-width: 980px) {
