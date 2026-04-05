@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Katex from "svelte-katex";
+
   const FIXED_SYSTEM_SIZE = 32;
   const FIXED_DOMAIN_DISPLAY = "4π";
   const FIXED_QUBO_BITS = 3;
@@ -67,6 +69,43 @@
   function quboDimension(): number {
     return FIXED_SYSTEM_SIZE * FIXED_QUBO_BITS;
   }
+
+  function latexifyExpression(expression: string): string {
+    return expression
+      .trim()
+      .replace(/\bpi\b/g, "\\pi")
+      .replace(/\bsin\b/g, "\\sin")
+      .replace(/\bcos\b/g, "\\cos")
+      .replace(/\*/g, " ");
+  }
+
+  function forcingLatex(): string {
+    return [
+      term(coeffSinX, " \\sin(x)"),
+      term(coeffSinY, " \\sin(y)"),
+      term(coeffCosX, " \\cos(x)"),
+      term(coeffCosY, " \\cos(y)"),
+      term(coeffSinXY, " \\sin(x)\\sin(y)"),
+      term(coeffCosXY, " \\cos(x)\\cos(y)")
+    ].join(" + ");
+  }
+
+  function domainLatex(): string {
+    return `\\Omega = (0, 4\\pi) \\times (0, 4\\pi)`;
+  }
+
+  function poissonLatex(): string {
+    return `-\\Delta u(x,y) = ${forcingLatex()} \\quad \\text{in } \\Omega`;
+  }
+
+  function boundaryLatex(): string {
+    const rhs = latexifyExpression(boundaryFunction) || "0";
+    return `u(x,y) = ${rhs} \\quad \\text{on } \\partial\\Omega`;
+  }
+
+  function quboLatex(): string {
+    return `\\text{QUBO dimension} = ${FIXED_SYSTEM_SIZE} \\cdot ${FIXED_QUBO_BITS} = ${quboDimension()}`;
+  }
 </script>
 
 <section class="page-shell">
@@ -106,7 +145,7 @@
       <section class="control-block">
         <h4>Forcing function</h4>
         <div class="formula-editor">
-          <span>f(x, y) =</span>
+          <span class="formula-label"><Katex>f(x,y)=</Katex></span>
           <input
             type="number"
             min={MIN_COEFF}
@@ -168,17 +207,19 @@
         <div class="control-block">
           <h4>Boundary function</h4>
           <label class="field">
-            <span>g on ∂Ω</span>
+            <span class="formula-label"><Katex>{"g \\text{ on } \\partial \\Omega"}</Katex></span>
             <input type="text" bind:value={boundaryFunction} />
           </label>
         </div>
 
         <div class="control-block preview-block">
           <h4>Preview</h4>
-          <p>Ω = (0, {FIXED_DOMAIN_DISPLAY}) × (0, {FIXED_DOMAIN_DISPLAY})</p>
-          <p>−Δu(x, y) = {forcingExpression()} in Ω</p>
-          <p>u(x, y) = {boundaryFunction} on ∂Ω</p>
-          <p>Internal QUBO dimension: {quboDimension()}</p>
+          <div class="equation-stack">
+            <div class="equation-line"><Katex>{domainLatex()}</Katex></div>
+            <div class="equation-line"><Katex>{poissonLatex()}</Katex></div>
+            <div class="equation-line"><Katex>{boundaryLatex()}</Katex></div>
+            <div class="equation-line"><Katex>{quboLatex()}</Katex></div>
+          </div>
           <p class="status-line">{status}</p>
         </div>
       </section>
@@ -286,6 +327,12 @@
     margin-top: 0.75rem;
   }
 
+  .formula-label {
+    display: inline-flex;
+    align-items: center;
+    color: #fff4c7;
+  }
+
   .formula-editor input,
   .field input {
     width: 4.8rem;
@@ -308,6 +355,21 @@
   .preview-block p,
   .status-line {
     margin: 0.35rem 0;
+  }
+
+  .equation-stack {
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .equation-line {
+    overflow-x: auto;
+    padding-bottom: 0.1rem;
+    color: #fff4c7;
+  }
+
+  :global(.preview-block .katex) {
+    font-size: 1.04rem;
   }
 
   .action-row {
