@@ -1,27 +1,29 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+
   const FIXED_SYSTEM_SIZE = 32;
   const FIXED_DOMAIN_DISPLAY = "4π";
   const FIXED_QUBO_BITS = 3;
   const MIN_COEFF = -10;
   const MAX_COEFF = 10;
 
-  type TabId = "background" | "comparison" | "allen-cahn" | "poisson" | "about";
+  type TabId = "home" | "quantum" | "learned" | "live";
 
   type Tab = {
     id: TabId;
     label: string;
-    eyebrow: string;
+    caption: string;
   };
 
   const tabs: Tab[] = [
-    { id: "background", label: "Background", eyebrow: "Context" },
-    { id: "comparison", label: "Classic vs. Quantum", eyebrow: "Comparison" },
-    { id: "allen-cahn", label: "Allen-Cahn", eyebrow: "Interactive" },
-    { id: "poisson", label: "Poisson Setup", eyebrow: "Current workflow" },
-    { id: "about", label: "About", eyebrow: "More Info" }
+    { id: "home", label: "Home", caption: "Landing" },
+    { id: "quantum", label: "Quantum", caption: "Background" },
+    { id: "learned", label: "Learned Solver", caption: "Model notes" },
+    { id: "live", label: "Live Solver", caption: "Allen-Cahn demo" }
   ];
 
-  let activeTab = $state<TabId>("poisson");
+  let activeTab = $state<TabId>("home");
+  let scrollY = $state(0);
 
   let coeffSinX = $state(1);
   let coeffSinY = $state(1);
@@ -30,10 +32,36 @@
   let coeffSinXY = $state(1);
   let coeffCosXY = $state(1);
   let boundaryFunction = $state("0");
-  let status = $state("Preview ready.");
+  let status = $state("Retro preview ready.");
 
-  function clampCoefficient(value: number): number {
-    return Math.max(MIN_COEFF, Math.min(MAX_COEFF, value));
+  onMount(() => {
+    const update = () => {
+      scrollY = window.scrollY;
+    };
+
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
+  });
+
+  function heroProgress(): number {
+    return Math.min(scrollY / 420, 1);
+  }
+
+  function activeTitleScale(): number {
+    return 1 - heroProgress() * 0.38;
+  }
+
+  function activeTitleOffset(): number {
+    return heroProgress() * -180;
+  }
+
+  function headerRevealProgress(): number {
+    if (activeTab !== "home") {
+      return 1;
+    }
+
+    return Math.max(0, Math.min((heroProgress() - 0.32) / 0.38, 1));
   }
 
   function updateCoefficient(
@@ -46,10 +74,10 @@
       return;
     }
 
-    setter(clampCoefficient(parsed));
+    setter(Math.max(MIN_COEFF, Math.min(MAX_COEFF, parsed)));
   }
 
-  function resetPoissonInputs() {
+  function resetInputs() {
     coeffSinX = 1;
     coeffSinY = 1;
     coeffCosX = 1;
@@ -57,17 +85,17 @@
     coeffSinXY = 1;
     coeffCosXY = 1;
     boundaryFunction = "0";
-    status = "Inputs reset to the default Poisson example.";
+    status = "Poisson inputs reset to defaults.";
   }
 
   function loadDemo() {
-    resetPoissonInputs();
+    resetInputs();
     boundaryFunction = "sin(x) + cos(y)";
-    status = "Loaded the demo forcing coefficients and boundary function.";
+    status = "Loaded the placeholder Poisson demo.";
   }
 
   function generatePreview() {
-    status = "Preview generated from the current Poisson setup.";
+    status = "Preview generated for the current Poisson setup.";
   }
 
   function coefficientString(value: number): string {
@@ -95,215 +123,331 @@
 </script>
 
 <svelte:head>
-  <title>BlasterHacks Quantum Annealing</title>
+  <title>Quantum Annealing App</title>
 </svelte:head>
 
 <main class="app-shell">
-  <section class="hero">
-    <p class="eyebrow">BlasterHacks Quantum Annealing</p>
-    <h1>Quantum Annealing + ML 4 PDEs B) </h1>
-    <p class="hero-copy">
-      Separate the mathematical background from the interactive setup. Keep the current
-      Poisson workflow intact while reserving a dedicated space for the Allen-Cahn view.
-    </p>
-  </section>
+  <header
+    class:compact={heroProgress() > 0.12}
+    class="top-chrome"
+    style={`opacity: ${headerRevealProgress()}; transform: translateY(${(1 - headerRevealProgress()) * -18}px); pointer-events: ${headerRevealProgress() < 0.05 ? "none" : "auto"};`}
+  >
+    <div class="brand-strip">
+      <span class="brand-name">Quantum Annealing</span>
+    </div>
+    <nav class="tab-bar" aria-label="Application pages">
+      {#each tabs as tab}
+        <button
+          class:home-tab={tab.id === "home"}
+          class:active={activeTab === tab.id}
+          class="tab-button"
+          type="button"
+          onclick={() => (activeTab = tab.id)}
+          aria-label={tab.label}
+        >
+          {#if tab.id === "home"}
+            <img src="/icons/pixel-house.png" alt="" class="home-icon" />
+          {:else}
+            <span class="tab-label">{tab.label}</span>
+          {/if}
+        </button>
+      {/each}
+    </nav>
+  </header>
 
-  <nav class="tab-bar" aria-label="Application sections">
-    {#each tabs as tab}
-      <button
-        class:active={activeTab === tab.id}
-        class="tab-button"
-        type="button"
-        onclick={() => (activeTab = tab.id)}
-      >
-        <span class="tab-eyebrow">{tab.eyebrow}</span>
-        <span class="tab-label">{tab.label}</span>
-      </button>
-    {/each}
-  </nav>
+  {#if activeTab === "home"}
+    <section class="landing-shell">
+      <section class="hero-stage">
+        <div class="hero-grid"></div>
+        <div class="hero-orb hero-orb-a"></div>
+        <div class="hero-orb hero-orb-b"></div>
 
-  {#if activeTab === "background"}
-    <section class="page-grid single">
-      <article class="panel prose">
-        <p class="section-label">Background</p>
-        <h2>What this app is organizing</h2>
-        <p>
-          The current interface fixes a Poisson problem on the domain
-          <strong> Ω = (0, 4π) × (0, 4π)</strong> with a single boundary function
-          <strong> g on ∂Ω</strong>. The user only adjusts the forcing-function coefficients and
-          the boundary expression.
-        </p>
-
-        <div class="callout">
-          <p class="callout-title">Model problem</p>
-          <p>−Δu(x, y) = f(x, y) in Ω</p>
-          <p>u(x, y) = g on ∂Ω</p>
+        <div
+          class="hero-title-wrap"
+          style={`transform: translateY(${activeTitleOffset()}px) scale(${activeTitleScale()});`}
+        >
+          <p class="hero-kicker">Simulating PDEs with</p>
+          <h1>QUANTUM<br />ANNEALING</h1>
+          <p class="hero-subtitle">
+            (or not)
+          </p>
         </div>
+      </section>
 
-        <h3>Why the forcing function is restricted</h3>
-        <p>
-          Instead of accepting an arbitrary symbolic expression, the app uses a fixed trig basis.
-          That keeps the interaction simple and makes downstream discretization and QUBO generation
-          more controlled.
-        </p>
-
-        <div class="formula-block">
-          <p>f(x, y) = a sin(x) + b sin(y) + c cos(x) + d cos(y)</p>
-          <p>+ e sin(x)sin(y) + f cos(x)cos(y)</p>
+      <section class="story-frame">
+        <article class="about-card">
+          <p class="window-tag">ABOUT US</p>
+          <h2>Who are we?</h2>
+          <p>
+            Byron Selvage: BS in AMS. MS in AMS in progress...
+          </p>
+          <p>
+            Landon Gehr: BS in CS. MS in CS in progress...
+          </p>
+          <p>
+            Kyle Sperber: BS in AMS and Physics. MS in AMS and Physics done?
+          </p>
+          <p>
+            Melody Goldanloo: BS in CS and MS in QE Software in progress...
+          </p>
+          <a
+            class="github-link"
+            href="https://github.com/Landon-Gehr/BlasterHacks-Quantum-Annealing"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Open GitHub repository"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12 2C6.48 2 2 6.59 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.88-2.78.62-3.37-1.21-3.37-1.21-.46-1.2-1.11-1.52-1.11-1.52-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.35 1.12 2.92.86.09-.67.35-1.12.63-1.38-2.22-.26-4.55-1.14-4.55-5.09 0-1.13.39-2.05 1.03-2.77-.1-.26-.45-1.3.1-2.71 0 0 .85-.28 2.8 1.06A9.5 9.5 0 0 1 12 7.1c.85 0 1.7.12 2.5.36 1.95-1.34 2.8-1.06 2.8-1.06.56 1.41.21 2.45.1 2.71.64.72 1.03 1.64 1.03 2.77 0 3.96-2.33 4.82-4.56 5.08.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.26 10.26 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z"
+              />
+            </svg>
+            <span class="github-tooltip">GitHub repo</span>
+          </a>
+        </article>
+      </section>
+    </section>
+  {:else if activeTab === "quantum"}
+    <section class="page-shell">
+      <article class="retro-window wide">
+        <div class="window-bar">
+          <span>Quantum / Background</span>
+          <span class="window-controls">_ □ ×</span>
         </div>
+        <div class="window-body">
+          <div class="window-copy">
+            <p class="section-kicker">Theory track</p>
+            <h3>QUBO → Ising → quantum annealing</h3>
+            <p>
+              This page will explain how the PDE-inspired optimization problem is encoded into a
+              QUBO, translated into Ising form, and then handed to a quantum annealing style
+              solver.
+            </p>
+            <p>
+              It should also carry the short proof-of-concept story: the theory works, but
+              simulating the relevant quantum processes on classical hardware is still
+              computationally impractical to scale.
+            </p>
+          </div>
+          <div class="pixel-panel">
+            <span class="pixel-label">PLACEHOLDER</span>
+            <div class="pixel-display">
+              <span>5×5</span>
+              <span>SYSTEM</span>
+            </div>
+          </div>
+        </div>
+      </article>
 
-        <h3>What stays fixed</h3>
-        <p>
-          The domain and discretization size stay fixed in this version of the app. That lets the
-          UI focus on problem specification rather than exposing lower-level numerical parameters.
-        </p>
+      <article class="retro-window duo">
+        <div class="window-bar">
+          <span>Results snapshot</span>
+          <span class="window-controls">_ □ ×</span>
+        </div>
+        <div class="window-body split">
+          <div>
+            <p class="section-kicker">What to show here later</p>
+            <ul>
+              <li>5×5 system and solution</li>
+              <li>Improved Poisson result</li>
+              <li>Short claim about limited scaling on classical hardware</li>
+            </ul>
+          </div>
+          <div class="pixel-card">
+            <div class="pixel-badge">RETRO PAGE</div>
+            <p>Drop in screenshots or figures later.</p>
+          </div>
+        </div>
       </article>
     </section>
-  {:else if activeTab === "allen-cahn"}
-    <section class="page-grid single">
-      <article class="panel prose">
-        <p class="section-label">Allen-Cahn</p>
-        <h2>Placeholder for the interactive Allen-Cahn workflow</h2>
-        <p>
-          This tab is ready to hold the separate Allen-Cahn interface once the model details are
-          finalized.
-        </p>
-
-        <div class="callout muted">
-          <p class="callout-title">Reserved scope</p>
-          <p>Parameter controls for the Allen-Cahn equation</p>
-          <p>Visualization of the evolving field or steady-state profile</p>
-          <p>Notes connecting the Allen-Cahn model to the annealing pipeline</p>
+  {:else if activeTab === "learned"}
+    <section class="page-shell">
+      <article class="retro-window full">
+        <div class="window-bar pink">
+          <span>Learned Solver</span>
+          <span class="window-controls">_ □ ×</span>
+        </div>
+        <div class="window-body stacked">
+          <p class="section-kicker">Placeholder</p>
+          <h2>Landon’s section goes here</h2>
+          <p>
+            This page is reserved for the learned-solver narrative and whatever “improves halfway
+            solved solution?” turns into once you have the final details.
+          </p>
+          <div class="pixel-card alt">
+            <p>Planned content:</p>
+            <ul>
+              <li>What the learned solver changes</li>
+              <li>Where it helps relative to the baseline</li>
+              <li>Illustrations or solver-state comparisons</li>
+            </ul>
+          </div>
         </div>
       </article>
     </section>
   {:else}
-    <section class="page-grid">
-      <article class="panel">
-        <p class="section-label">Poisson Setup</p>
-        <h2>Current interactive configuration</h2>
-        <p class="meta-line">
-          Fixed domain Ω = (0, {FIXED_DOMAIN_DISPLAY}) × (0, {FIXED_DOMAIN_DISPLAY}), fixed n =
-          {FIXED_SYSTEM_SIZE}
-        </p>
-
-        <section class="block">
-          <div class="block-header">
-            <h3>Forcing Function</h3>
-            <p>Edit coefficients directly in the formula. Each coefficient is clamped to [-10, 10].</p>
+    <section class="page-shell">
+      <article class="retro-window full">
+        <div class="window-bar blue">
+          <span>Live Solver / Allen-Cahn</span>
+          <span class="window-controls">_ □ ×</span>
+        </div>
+        <div class="window-body stacked">
+          <div class="window-copy">
+            <p class="section-kicker">Interactive demo</p>
+            <h2>Draw an initial condition, then watch it evolve</h2>
+            <p>
+              The long-term goal here is a live Allen-Cahn demo driven by a classical time-stepping
+              solver, with discussion of what the linear solves enable and what it would cost to
+              push the same workflow onto a QPU.
+            </p>
           </div>
-
-          <div class="formula-editor">
-            <span>f(x, y) =</span>
-            <input
-              type="number"
-              min={MIN_COEFF}
-              max={MAX_COEFF}
-              step="any"
-              bind:value={coeffSinX}
-              onchange={(event) => updateCoefficient((value) => (coeffSinX = value), event)}
-            />
-            <span>sin(x) +</span>
-            <input
-              type="number"
-              min={MIN_COEFF}
-              max={MAX_COEFF}
-              step="any"
-              bind:value={coeffSinY}
-              onchange={(event) => updateCoefficient((value) => (coeffSinY = value), event)}
-            />
-            <span>sin(y) +</span>
-            <input
-              type="number"
-              min={MIN_COEFF}
-              max={MAX_COEFF}
-              step="any"
-              bind:value={coeffCosX}
-              onchange={(event) => updateCoefficient((value) => (coeffCosX = value), event)}
-            />
-            <span>cos(x) +</span>
-            <input
-              type="number"
-              min={MIN_COEFF}
-              max={MAX_COEFF}
-              step="any"
-              bind:value={coeffCosY}
-              onchange={(event) => updateCoefficient((value) => (coeffCosY = value), event)}
-            />
-            <span>cos(y) +</span>
-            <input
-              type="number"
-              min={MIN_COEFF}
-              max={MAX_COEFF}
-              step="any"
-              bind:value={coeffSinXY}
-              onchange={(event) => updateCoefficient((value) => (coeffSinXY = value), event)}
-            />
-            <span>sin(x)sin(y) +</span>
-            <input
-              type="number"
-              min={MIN_COEFF}
-              max={MAX_COEFF}
-              step="any"
-              bind:value={coeffCosXY}
-              onchange={(event) => updateCoefficient((value) => (coeffCosXY = value), event)}
-            />
-            <span>cos(x)cos(y)</span>
-          </div>
-        </section>
-
-        <section class="block">
-          <div class="block-header">
-            <h3>Boundary Function</h3>
-            <p>Single Dirichlet boundary function used across the whole boundary ∂Ω.</p>
-          </div>
-
-          <label class="field">
-            <span>g on ∂Ω</span>
-            <input type="text" bind:value={boundaryFunction} />
-          </label>
-        </section>
-
-        <div class="action-row">
-          <button type="button" class="primary" onclick={generatePreview}>Generate Preview</button>
-          <button type="button" onclick={loadDemo}>Load Demo</button>
-          <button type="button" onclick={resetPoissonInputs}>Reset</button>
         </div>
       </article>
 
-      <aside class="panel preview">
-        <p class="section-label">Preview</p>
-        <h2>Problem statement</h2>
-
-        <div class="callout">
-          <p>Ω = (0, {FIXED_DOMAIN_DISPLAY}) × (0, {FIXED_DOMAIN_DISPLAY})</p>
-          <p>−Δu(x, y) = {forcingExpression()} in Ω</p>
-          <p>u(x, y) = {boundaryFunction} on ∂Ω</p>
+      <article class="retro-window full">
+        <div class="window-bar orange">
+          <span>Current Poisson setup placeholder</span>
+          <span class="window-controls">_ □ ×</span>
         </div>
-
-        <section class="block compact">
-          <div class="block-header">
-            <h3>Discretization</h3>
+        <div class="window-body stacked">
+          <div class="compact-intro">
+            <p class="section-kicker">Existing workflow</p>
+            <h3>Retro-window version of the current form</h3>
+            <p>
+              This is where the current Poisson setup lives for now, inside a full-width retro page
+              rather than a utility dashboard split.
+            </p>
           </div>
-          <p>Fixed grid size: n = {FIXED_SYSTEM_SIZE}</p>
-          <p>Internal QUBO dimension: {quboDimension()}</p>
-        </section>
 
-        <p class="status">{status}</p>
-      </aside>
+          <section class="control-block">
+            <h4>Forcing function</h4>
+            <div class="formula-editor">
+              <span>f(x, y) =</span>
+              <input
+                type="number"
+                min={MIN_COEFF}
+                max={MAX_COEFF}
+                step="any"
+                bind:value={coeffSinX}
+                onchange={(event) => updateCoefficient((value) => (coeffSinX = value), event)}
+              />
+              <span>sin(x) +</span>
+              <input
+                type="number"
+                min={MIN_COEFF}
+                max={MAX_COEFF}
+                step="any"
+                bind:value={coeffSinY}
+                onchange={(event) => updateCoefficient((value) => (coeffSinY = value), event)}
+              />
+              <span>sin(y) +</span>
+              <input
+                type="number"
+                min={MIN_COEFF}
+                max={MAX_COEFF}
+                step="any"
+                bind:value={coeffCosX}
+                onchange={(event) => updateCoefficient((value) => (coeffCosX = value), event)}
+              />
+              <span>cos(x) +</span>
+              <input
+                type="number"
+                min={MIN_COEFF}
+                max={MAX_COEFF}
+                step="any"
+                bind:value={coeffCosY}
+                onchange={(event) => updateCoefficient((value) => (coeffCosY = value), event)}
+              />
+              <span>cos(y) +</span>
+              <input
+                type="number"
+                min={MIN_COEFF}
+                max={MAX_COEFF}
+                step="any"
+                bind:value={coeffSinXY}
+                onchange={(event) => updateCoefficient((value) => (coeffSinXY = value), event)}
+              />
+              <span>sin(x)sin(y) +</span>
+              <input
+                type="number"
+                min={MIN_COEFF}
+                max={MAX_COEFF}
+                step="any"
+                bind:value={coeffCosXY}
+                onchange={(event) => updateCoefficient((value) => (coeffCosXY = value), event)}
+              />
+              <span>cos(x)cos(y)</span>
+            </div>
+          </section>
+
+          <section class="control-grid">
+            <div class="control-block">
+              <h4>Boundary function</h4>
+              <label class="field">
+                <span>g on ∂Ω</span>
+                <input type="text" bind:value={boundaryFunction} />
+              </label>
+            </div>
+
+            <div class="control-block preview-block">
+              <h4>Preview</h4>
+              <p>Ω = (0, {FIXED_DOMAIN_DISPLAY}) × (0, {FIXED_DOMAIN_DISPLAY})</p>
+              <p>−Δu(x, y) = {forcingExpression()} in Ω</p>
+              <p>u(x, y) = {boundaryFunction} on ∂Ω</p>
+              <p>Internal QUBO dimension: {quboDimension()}</p>
+              <p class="status-line">{status}</p>
+            </div>
+          </section>
+
+          <div class="action-row">
+            <button type="button" class="primary" onclick={generatePreview}>Generate Preview</button>
+            <button type="button" onclick={loadDemo}>Load Demo</button>
+            <button type="button" onclick={resetInputs}>Reset</button>
+          </div>
+        </div>
+      </article>
     </section>
   {/if}
 </main>
 
 <style>
+  @font-face {
+    font-family: "Quagey";
+    src: url("/fonts/QuageyPixel-Regular.otf") format("opentype");
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Glastone";
+    src: url("/fonts/GlastonePixel-Regular.otf") format("opentype");
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Dotemp";
+    src: url("/fonts/Dotemp-8bit.ttf") format("truetype");
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "RetroByte";
+    src: url("/fonts/RetroByte.ttf") format("truetype");
+    font-display: swap;
+  }
+
+  :global(html) {
+    scroll-behavior: smooth;
+  }
+
   :global(body) {
     margin: 0;
-    font-family:
-      "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
-    color: #f5efe0;
+    color: #f4ddff;
     background:
-      radial-gradient(circle at top, rgba(215, 141, 63, 0.18), transparent 34%),
-      linear-gradient(180deg, #151313 0%, #0d0f14 100%);
+      radial-gradient(circle at 20% 15%, rgba(255, 55, 140, 0.16), transparent 24%),
+      radial-gradient(circle at 80% 22%, rgba(44, 155, 255, 0.18), transparent 28%),
+      linear-gradient(180deg, #090910 0%, #0e0814 56%, #07070c 100%);
+    font-family: "Dotemp", "RetroByte", monospace;
   }
 
   :global(button),
@@ -313,158 +457,366 @@
 
   .app-shell {
     min-height: 100vh;
-    padding: 2rem 2rem 2.5rem;
-    box-sizing: border-box;
   }
 
-  .hero {
-    max-width: 62rem;
-    margin-bottom: 1.5rem;
+  .top-chrome {
+    position: sticky;
+    top: 1.35rem;
+    z-index: 40;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 2rem;
+    width: min(1100px, calc(100vw - 1.6rem));
+    margin: 0 auto;
+    padding: 0.45rem 0.2rem 0.65rem;
+    background: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    transition:
+      opacity 0.28s ease,
+      transform 0.32s ease;
   }
 
-  .eyebrow,
-  .section-label,
-  .tab-eyebrow {
-    margin: 0;
+  .brand-strip {
+    display: flex;
+    align-items: flex-end;
+    color: #fff6a8;
+    font-family: "Dotemp", "RetroByte", monospace;
+    font-size: 0.98rem;
+    letter-spacing: 0.08em;
+    line-height: 1;
+  }
+
+  .brand-name {
     text-transform: uppercase;
-    letter-spacing: 0.16em;
-    font-size: 0.72rem;
-    color: #d1a05a;
-  }
-
-  .hero h1,
-  .panel h2,
-  .prose h2 {
-    margin: 0.25rem 0 0;
-    font-size: clamp(2rem, 4vw, 3.4rem);
-    line-height: 1.02;
-    font-weight: 600;
-  }
-
-  .hero-copy,
-  .meta-line,
-  .block-header p,
-  .prose p,
-  .status {
-    color: #d3d0c7;
-  }
-
-  .hero-copy {
-    max-width: 46rem;
-    margin: 0.9rem 0 0;
-    font-size: 1.02rem;
-    line-height: 1.6;
   }
 
   .tab-bar {
     display: flex;
-    gap: 0.85rem;
-    margin-bottom: 1.5rem;
+    gap: 0.55rem;
     flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: flex-end;
   }
 
   .tab-button {
-    border: 1px solid rgba(236, 215, 177, 0.16);
-    border-radius: 1.15rem;
-    background: rgba(18, 20, 28, 0.72);
-    color: #efe8d8;
-    padding: 0.9rem 1rem;
-    min-width: 12rem;
-    text-align: left;
+    display: inline-flex;
+    align-items: flex-end;
+    min-width: auto;
+    border: none;
+    background: transparent;
+    color: rgba(255, 232, 255, 0.72);
+    border-radius: 999px;
+    padding: 0.35rem 0.55rem;
+    text-align: center;
     cursor: pointer;
+    box-shadow: none;
     transition:
+      color 0.2s ease,
       transform 0.2s ease,
-      border-color 0.2s ease,
-      background 0.2s ease;
-  }
-
-  .tab-button:hover {
-    transform: translateY(-1px);
-    border-color: rgba(236, 215, 177, 0.36);
+      background-color 0.2s ease;
   }
 
   .tab-button.active {
-    background: linear-gradient(135deg, rgba(160, 90, 37, 0.95), rgba(74, 39, 28, 0.95));
-    border-color: rgba(255, 222, 174, 0.48);
+    color: #fff6a8;
+    background: rgba(255, 255, 255, 0.05);
   }
 
   .tab-label {
     display: block;
-    margin-top: 0.2rem;
-    font-size: 1.1rem;
-    font-weight: 600;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    line-height: 1;
+    position: relative;
+    top: 4px;
   }
 
-  .page-grid {
+  .tab-button:hover {
+    color: #ffffff;
+    transform: translateY(-1px);
+  }
+
+  .home-tab {
+    padding: 0.05rem 0.3rem 0;
+  }
+
+  .home-icon {
+    display: block;
+    width: 28px;
+    height: 28px;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  .landing-shell,
+  .page-shell {
+    padding: 1.25rem;
+  }
+
+  .hero-stage {
+    position: relative;
+    min-height: 110vh;
     display: grid;
-    grid-template-columns: minmax(0, 1.6fr) minmax(20rem, 0.9fr);
-    gap: 1.25rem;
-    align-items: start;
+    place-items: center;
+    overflow: hidden;
   }
 
-  .page-grid.single {
-    grid-template-columns: minmax(0, 1fr);
+  .hero-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 56px 56px;
+    opacity: 0.28;
   }
 
-  .panel {
-    border: 1px solid rgba(236, 215, 177, 0.13);
-    border-radius: 1.6rem;
-    background:
-      linear-gradient(180deg, rgba(27, 30, 38, 0.95), rgba(15, 17, 23, 0.95));
-    padding: 1.4rem;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  .hero-orb {
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(20px);
+    opacity: 0.7;
   }
 
-  .prose {
-    max-width: 58rem;
+  .hero-orb-a {
+    width: 14rem;
+    height: 14rem;
+    background: rgba(255, 84, 162, 0.34);
+    top: 15%;
+    left: 8%;
   }
 
-  .prose h3 {
-    margin-bottom: 0.45rem;
-    font-size: 1.15rem;
+  .hero-orb-b {
+    width: 16rem;
+    height: 16rem;
+    background: rgba(49, 143, 255, 0.3);
+    right: 10%;
+    bottom: 14%;
   }
 
-  .callout,
-  .formula-block,
-  .block {
-    border-radius: 1.1rem;
-    background: rgba(250, 245, 232, 0.04);
-    border: 1px solid rgba(236, 215, 177, 0.12);
-    padding: 1rem 1.05rem;
+  .hero-title-wrap {
+    position: sticky;
+    top: 7rem;
+    z-index: 2;
+    width: min(72rem, calc(100vw - 3rem));
+    padding: 1.8rem;
+    transform-origin: top center;
+    transition: transform 0.14s linear;
   }
 
-  .callout {
-    margin: 1rem 0;
+  .hero-kicker,
+  .section-kicker,
+  .window-tag {
+    margin: 0 0 0.6rem;
+    color: #ff8fcb;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 1.5rem;
   }
 
-  .callout-title {
-    margin: 0 0 0.5rem;
-    font-weight: 700;
-    color: #f6d49d;
-  }
-
-  .muted {
-    opacity: 0.88;
-  }
-
-  .formula-block {
-    font-family: "STIX Two Text", "Times New Roman", serif;
-    font-size: 1.04rem;
-  }
-
-  .block + .block {
-    margin-top: 1rem;
-  }
-
-  .block-header h3 {
+  .hero-title-wrap h1 {
     margin: 0;
-    font-size: 1.15rem;
+    font-family: "Quagey", "Dotemp", monospace;
+    font-size: clamp(4.8rem, 82vw, 11.5rem);
+    line-height: 0.88;
+    letter-spacing: 0.06em;
+    color: #fff6a8;
+    text-shadow:
+      0 0 18px rgba(255, 153, 0, 0.18),
+      4px 4px 0 #05050a;
   }
 
-  .block-header p {
-    margin: 0.3rem 0 0;
-    font-size: 0.96rem;
+  .hero-subtitle {
+    width: min(30rem, 100%);
+    margin: 1.2rem 0 0;
+    color: #f7dfff;
+    font-size: 1.1rem;
     line-height: 1.5;
+  }
+
+  .github-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 1.2rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #fff3ff;
+    text-decoration: none;
+    transition:
+      transform 0.2s ease,
+      color 0.2s ease;
+  }
+
+  .github-link:hover {
+    transform: translateY(-1px);
+    color: #fff6a8;
+  }
+
+  .github-link svg {
+    width: 64px;
+    height: 64px;
+    fill: currentColor;
+  }
+
+  .github-tooltip {
+    opacity: 0;
+    transform: translateX(-4px);
+    transition:
+      opacity 0.18s ease,
+      transform 0.18s ease;
+    color: currentColor;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+
+  .github-link:hover .github-tooltip,
+  .github-link:focus-visible .github-tooltip {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .story-frame,
+  .page-shell {
+    display: grid;
+    gap: 1.15rem;
+  }
+
+  .about-card,
+  .retro-window {
+    border: 2px solid #2b2340;
+    background:
+      linear-gradient(180deg, rgba(20, 16, 28, 0.96), rgba(10, 10, 16, 0.96));
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.02) inset,
+      8px 8px 0 #06050a;
+  }
+
+  .about-card {
+    padding: 1.3rem;
+  }
+
+  .about-card h2,
+  .window-copy h3,
+  .retro-window h2,
+  .retro-window h3 {
+    margin: 0.25rem 0 0.75rem;
+    font-family: "Glastone", "Dotemp", monospace;
+    color: #fff6a8;
+    line-height: 1.05;
+  }
+
+  .retro-window.full,
+  .retro-window.wide,
+  .retro-window.duo {
+    width: 100%;
+  }
+
+  .window-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.55rem 0.8rem;
+    border-bottom: 2px solid #2b2340;
+    background: linear-gradient(90deg, #2f2750, #19162d);
+    color: #fff3ff;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+  }
+
+  .window-bar.pink {
+    background: linear-gradient(90deg, #ef70b7, #9c3f72);
+    color: #240914;
+  }
+
+  .window-bar.blue {
+    background: linear-gradient(90deg, #6ab6ff, #2f5cff);
+    color: #081327;
+  }
+
+  .window-bar.orange {
+    background: linear-gradient(90deg, #ffb347, #ff6e42);
+    color: #241105;
+  }
+
+  .window-controls {
+    letter-spacing: 0.2em;
+  }
+
+  .window-body {
+    padding: 1rem 1.1rem 1.15rem;
+  }
+
+  .window-body.stacked {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .window-body.split {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1.2fr) minmax(14rem, 0.8fr);
+  }
+
+  .pixel-panel,
+  .pixel-card,
+  .control-block {
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.035);
+    padding: 0.9rem;
+  }
+
+  .pixel-panel {
+    display: grid;
+    align-content: center;
+    min-height: 12rem;
+    background:
+      linear-gradient(180deg, rgba(255, 211, 97, 0.14), rgba(255, 72, 130, 0.08)),
+      rgba(255, 255, 255, 0.03);
+  }
+
+  .pixel-label {
+    display: inline-block;
+    margin-bottom: 0.8rem;
+    color: #84c3ff;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .pixel-display {
+    font-family: "Glastone", "Dotemp", monospace;
+    font-size: clamp(2rem, 5vw, 3.8rem);
+    line-height: 0.9;
+    color: #ffe972;
+  }
+
+  .pixel-card.alt {
+    background: rgba(92, 190, 255, 0.08);
+  }
+
+  .compact-intro p,
+  .window-copy p,
+  .about-card p,
+  .retro-window p,
+  .retro-window li {
+    color: #efdaf9;
+    line-height: 1.65;
+  }
+
+  .page-shell {
+    padding: 1.25rem;
+  }
+
+  .control-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.9fr);
   }
 
   .formula-editor {
@@ -472,81 +824,79 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.55rem;
-    margin-top: 0.8rem;
+    margin-top: 0.75rem;
   }
 
   .formula-editor input,
   .field input {
-    border: 1px solid rgba(236, 215, 177, 0.18);
-    border-radius: 0.8rem;
-    background: rgba(11, 13, 18, 0.8);
-    color: #f8f1e2;
-    padding: 0.55rem 0.7rem;
+    width: 4.8rem;
+    border: 2px solid #332b4b;
+    background: #0c0b14;
+    color: #ffeefc;
+    padding: 0.55rem 0.6rem;
     outline: none;
-  }
-
-  .formula-editor input {
-    width: 4.9rem;
   }
 
   .field {
     display: grid;
-    gap: 0.55rem;
-    margin-top: 0.75rem;
+    gap: 0.6rem;
   }
 
-  .field span {
-    color: #f0e3c9;
+  .field input {
+    width: 100%;
   }
 
   .action-row {
     display: flex;
     gap: 0.8rem;
     flex-wrap: wrap;
-    margin-top: 1.25rem;
   }
 
   .action-row button {
-    border: 1px solid rgba(236, 215, 177, 0.18);
-    border-radius: 999px;
-    background: rgba(13, 15, 20, 0.82);
-    color: #f8f1e2;
+    border: 2px solid #38294f;
+    background: linear-gradient(180deg, #181420, #100d16);
+    color: #fbeeff;
     padding: 0.7rem 1rem;
     cursor: pointer;
+    box-shadow: 4px 4px 0 #06050a;
   }
 
   .action-row button.primary {
-    background: linear-gradient(135deg, #c46d35, #8e4326);
-    border-color: rgba(255, 211, 153, 0.26);
+    background: linear-gradient(180deg, #ff4aa2, #b8307d);
+    color: #250812;
   }
 
-  .preview .callout p,
-  .formula-block p,
-  .callout p {
-    margin: 0.2rem 0;
+  .preview-block p,
+  .status-line {
+    margin: 0.35rem 0;
   }
 
-  .compact {
-    margin-top: 1rem;
-  }
-
-  .status {
-    margin: 1rem 0 0;
-    font-size: 0.95rem;
-  }
-
-  @media (max-width: 920px) {
-    .app-shell {
-      padding: 1.2rem;
+  @media (max-width: 980px) {
+    .top-chrome {
+      flex-direction: column;
+      align-items: stretch;
+      top: 0.75rem;
+      width: calc(100vw - 1rem);
     }
 
-    .page-grid {
+    .tab-bar {
+      justify-content: flex-start;
+    }
+
+    .window-body.split,
+    .control-grid {
       grid-template-columns: minmax(0, 1fr);
     }
 
-    .tab-button {
-      min-width: unset;
-      flex: 1 1 12rem;
+    .hero-title-wrap {
+      width: calc(100vw - 2rem);
+      top: 6.5rem;
+      padding: 1rem;
+    }
+
+    .landing-shell,
+    .page-shell {
+      padding: 0.8rem;
     }
   }
 </style>

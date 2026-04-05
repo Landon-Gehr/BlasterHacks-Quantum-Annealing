@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "bh-quantum-annealing-app",
-        "width": 800,
-        "height": 600
+        "title": "Quantum Annealing App",
+        "width": 1440,
+        "height": 920,
+        "minWidth": 1100,
+        "minHeight": 760
       }
     ],
     "security": {
