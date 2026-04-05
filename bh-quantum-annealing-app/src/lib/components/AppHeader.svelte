@@ -14,7 +14,7 @@
   } = $props();
 </script>
 
-<header class="top-chrome" style={headerStyle}>
+<header class:glass-shell={activeTab !== "home"} class="top-chrome" style={headerStyle}>
   <div class="brand-strip">
     <span class="brand-name">Quantum Annealing</span>
   </div>
@@ -54,7 +54,41 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
     transition:
       opacity 0.28s ease,
-      transform 0.32s ease;
+      transform 0.32s ease,
+      background-color 0.28s ease,
+      box-shadow 0.28s ease,
+      border-color 0.28s ease;
+  }
+
+  .glass-shell {
+    padding: 0.5rem 2rem 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 1.25rem;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+      linear-gradient(180deg, rgba(23, 18, 35, 0.5), rgba(12, 12, 20, 0.45));
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    box-shadow:
+      0 10px 30px rgba(0, 0, 0, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .glass-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 12% 18%, rgba(255, 95, 170, 0.14), transparent 28%),
+      radial-gradient(circle at 84% 22%, rgba(82, 176, 255, 0.16), transparent 30%);
+    opacity: 0.95;
+  }
+
+  .glass-shell > * {
+    position: relative;
+    z-index: 1;
   }
 
   .brand-strip {
@@ -135,6 +169,11 @@
       align-items: stretch;
       top: 0.75rem;
       width: calc(100vw - 1rem);
+    }
+
+    .glass-shell {
+      padding: 0.75rem;
+      border-radius: 1rem;
     }
 
     .tab-bar {

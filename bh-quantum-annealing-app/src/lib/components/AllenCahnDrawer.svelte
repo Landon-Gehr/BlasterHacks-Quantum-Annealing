@@ -532,6 +532,17 @@
       <input type="range" min="1" max="8" bind:value={brushRadius} />
       <strong>{brushRadius}</strong>
     </label>
+    <button
+      type="button"
+      class="primary icon-button"
+      onclick={runEvolution}
+      aria-label="Play solver"
+      title="Play solver"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M8 6L18 12L8 18Z"></path>
+      </svg>
+    </button>
     <button type="button" class="primary" onclick={runEvolution}>Run evolution</button>
     <button type="button" onclick={stopEvolution}>Pause</button>
     <button type="button" class="primary" onclick={seedDemo}>Load sample</button>
@@ -698,6 +709,20 @@
   .drawer-actions .primary {
     background: linear-gradient(180deg, #6ab6ff, #2f5cff);
     color: #081327;
+  }
+
+  .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    padding: 0.7rem;
+  }
+
+  .icon-button svg {
+    width: 1rem;
+    height: 1rem;
+    fill: currentColor;
   }
 
   .drawer-note {

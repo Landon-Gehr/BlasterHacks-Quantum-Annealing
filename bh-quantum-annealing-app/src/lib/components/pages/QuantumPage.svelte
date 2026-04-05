@@ -185,22 +185,7 @@
     </div>
     <div class="window-body split">
       <div>
-        <p class="section-kicker">Scaling wall</p>
-        <p>
-          The theory is clean, but the variable count grows quickly. If a 2D grid has
-          <em>m</em>×<em>m</em> unknowns, then the linear system size is <em>n = m²</em>. Encoding
-          each unknown with <em>K</em> bits creates a QUBO with <em>q = nK</em> binary variables.
-        </p>
-        <p>
-          That means the QUBO matrix itself is <em>q × q</em>, so the interaction structure grows
-          like <em>m⁴K²</em>. This is exactly why the project works as a proof of concept on small
-          systems but becomes computationally painful when we try to scale realistic PDE grids on
-          classical hardware.
-        </p>
-        <p>
-          In short: the mapping from PDE solve to annealing objective works, but simulating the
-          quantum process classically is the bottleneck.
-        </p>
+        <p class="section-kicker">Annealing Solver</p>
       </div>
 
       <div class="annealer-grid">
@@ -427,7 +412,6 @@
     background: rgba(255, 255, 255, 0.035);
   }
 
-  .panel-label,
   .result-tag,
   .eq-label,
   .step-label {
