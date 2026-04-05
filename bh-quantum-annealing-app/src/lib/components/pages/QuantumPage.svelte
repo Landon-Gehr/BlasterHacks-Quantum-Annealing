@@ -13,66 +13,6 @@
   const exampleA = String.raw`A=\begin{bmatrix}1&3&0&2&0\\0&0&4&6&5\\3&1&3&0&2\\1&0&0&0&3\\2&0&5&1&0\end{bmatrix}`;
   const exampleB = String.raw`b=\begin{bmatrix}15\\61\\24\\16\\21\end{bmatrix}`;
   const exampleEncoding = String.raw`u_{\min}=0,\quad u_{\max}=10,\quad K=12\Rightarrow q=5\cdot12=60`;
-
-  const pipelineStages = [
-    {
-      step: "01",
-      label: "PDE",
-      title: "Start with the continuous problem",
-      body:
-        "The classical model is a Poisson problem on a rectangular domain. Boundary data and forcing define the field we want to recover.",
-      math: poissonEq
-    },
-    {
-      step: "02",
-      label: "Discretize",
-      title: "Turn the PDE into algebra",
-      body:
-        "Finite differences replace derivatives with local stencil updates, producing a sparse linear system whose unknowns are the grid values.",
-      math: finiteDifferenceEq
-    },
-    {
-      step: "03",
-      label: "Encode",
-      title: "Represent real variables with bits",
-      body:
-        "Each continuous unknown is approximated with a fixed binary expansion over a chosen interval. This is the bridge from numerics to combinatorics.",
-      math: encodingEq
-    },
-    {
-      step: "04",
-      label: "Optimize",
-      title: "Solve QUBO, then map to Ising",
-      body:
-        "The encoded objective becomes a binary quadratic model. That QUBO is then translated into an Ising Hamiltonian for annealing.",
-      math: `${quboEq}\\\\${isingEq}`
-    }
-  ];
-
-  const successPanels = [
-    {
-      title: "The mapping exists end to end",
-      text:
-        "The codebase already includes the full symbolic pipeline from sparse linear system to QUBO to Ising model to annealing simulator."
-    },
-    {
-      title: "Small systems are explainable",
-      text:
-        "A 5×5 example is small enough to inspect directly, which makes it useful for understanding how the encoding behaves."
-    },
-    {
-      title: "Classical Poisson solves remain the baseline",
-      text:
-        "The finite-difference side still gives the cleanest path to reliable PDE solutions, which is why it acts as the comparison point."
-    }
-  ];
-
-  const limitations = [
-    "Each real unknown becomes K binary variables.",
-    "A 2D grid with m\\times m unknowns gives n=m^2 real variables.",
-    "So the QUBO dimension becomes q=nK=m^2K.",
-    "The interaction structure scales like m^4K^2, which becomes expensive very quickly."
-  ];
 </script>
 
 <section class="page-shell">
@@ -97,7 +37,6 @@
           <code>quantrs2_anneal</code> simulator.
         </p>
       </div>
-
       <div class="pixel-panel equation-panel">
         <span class="pixel-label">Pipeline</span>
         <div class="equation-stack">
@@ -121,22 +60,21 @@
       <div>
         <p class="section-kicker">5×5 system from the Rust crate</p>
         <p>
-          The current <code>quantum-solver</code> crate includes a concrete 5×5 linear system. It
-          uses a dense example matrix, converts it to sparse form, chooses a real-valued encoding
-          range, and builds the QUBO from there.
+          The current `quantum-solver` crate includes a concrete 5×5 linear system. It uses a
+          dense example matrix, converts it to sparse form, chooses a real-valued encoding range,
+          and builds the QUBO from there.
         </p>
         <p>
           That gives a small enough system to explain the mechanics clearly while still exercising
           the full pipeline implemented in the solver code.
         </p>
         <ul>
-          <li><code>dense_to_csmat</code> and <code>dense_to_csvec</code> prepare sparse inputs.</li>
-          <li><code>compute_qubo</code> forms the binary objective from <code>A</code>, <code>b</code>, and the encoding.</li>
-          <li><code>qubo_to_ising</code> converts QUBO coefficients into Ising fields and couplings.</li>
-          <li><code>solve_ising_model</code> runs the annealing simulator and decodes the bits back to reals.</li>
+          <li>`dense_to_csmat` and `dense_to_csvec` convert the example into sparse storage.</li>
+          <li>`compute_qubo` forms the binary objective from `A`, `b`, and the encoding.</li>
+          <li>`qubo_to_ising` converts the QUBO coefficients into Ising fields and couplings.</li>
+          <li>`solve_ising_model` runs the annealing simulator and decodes the bits back to reals.</li>
         </ul>
       </div>
-
       <div class="pixel-card math-card">
         <div class="pixel-badge">Current Example</div>
         <div class="equation-stack">
@@ -145,10 +83,10 @@
           <div class="equation-line"><Katex>{normalEq}</Katex></div>
           <div class="equation-line"><Katex>{exampleEncoding}</Katex></div>
         </div>
-        <p class="math-caption">
+        <p>
           Continuous field → sparse algebra → binary optimization → spin Hamiltonian.
         </p>
-      </div>
+      </aside>
     </div>
   </article>
 
@@ -164,15 +102,15 @@
       </div>
 
       <div class="pipeline-grid">
-        {#each pipelineStages as stage}
+        {#each pipeline as stage}
           <section class="theory-card">
             <div class="theory-topline">
               <span class="step-chip">{stage.step}</span>
               <span class="step-label">{stage.label}</span>
             </div>
             <h4>{stage.title}</h4>
-            <p>{stage.body}</p>
-            <div class="equation-line compact"><Katex>{stage.math}</Katex></div>
+            <div class="math-block">{@html renderBlockMath(stage.math)}</div>
+            <div class="math-block emphasis">{@html renderBlockMath(stage.objective)}</div>
           </section>
         {/each}
       </div>
@@ -203,46 +141,92 @@
           quantum process classically is the bottleneck.
         </p>
       </div>
-
       <div class="pixel-card">
         <div class="pixel-badge">Takeaway</div>
         <div class="equation-stack">
           <div class="equation-line"><Katex>{scaleEq}</Katex></div>
           <div class="equation-line"><Katex>{gridScaleEq}</Katex></div>
         </div>
-        <div class="limitations">
+        <p class="takeaway-copy">
+          TL;DR: the workflow is mathematically valid and small examples are informative, but the
+          state size and coupling count explode before the approach becomes a practical classical
+          replacement for standard PDE solvers.
+        </p>
+      </div>
+    </div>
+  </article>
+
+  <div class="lower-grid">
+    <article class="retro-window">
+      <div class="window-bar orange">
+        <span>What Worked</span>
+        <span class="window-controls">_ □ ×</span>
+      </div>
+      <div class="window-body stacked">
+        <div class="section-head compact">
+          <p class="section-kicker">Proof of concept</p>
+          <h3>Observed successes</h3>
+        </div>
+
+        <div class="results-list short">
+          {#each successPanels as panel}
+            <section class="result-card">
+              <h4>{panel.title}</h4>
+              <div class="math-block emphasis">{@html renderBlockMath(panel.math)}</div>
+            </section>
+          {/each}
+        </div>
+
+        <section class="matrix-board">
+          <span class="result-tag">5x5 system solved</span>
+          <div class="math-block emphasis">{@html renderBlockMath(systemEquation)}</div>
+          <div class="matrix-grid">
+            <div>
+              <span class="eq-label">A</span>
+              <div class="math-block matrix-math">{@html renderBlockMath(String.raw`A = ${solvedMatrixA}`)}</div>
+            </div>
+            <div>
+              <span class="eq-label">b</span>
+              <div class="math-block matrix-math">{@html renderBlockMath(String.raw`b = ${solvedVectorB}`)}</div>
+            </div>
+          </div>
+          <div class="math-block">{@html renderBlockMath(solvedSystem.encoding)}</div>
+          <div class="matrix-grid">
+            <div>
+              <span class="eq-label">Recovered x</span>
+              <div class="math-block matrix-math">{@html renderBlockMath(String.raw`x_{\mathrm{QA}} = ${solvedRecoveredX}`)}</div>
+            </div>
+            <div>
+              <span class="eq-label">True x</span>
+              <div class="math-block matrix-math">{@html renderBlockMath(String.raw`x_{\mathrm{true}} = ${solvedTrueX}`)}</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </article>
+
+    <article class="retro-window">
+      <div class="window-bar red">
+        <span>Limitations</span>
+        <span class="window-controls">_ □ ×</span>
+      </div>
+      <div class="window-body stacked">
+        <div class="section-head compact">
+          <p class="section-kicker">Reality check</p>
+          <h3>Why this does not scale yet</h3>
+        </div>
+
+        <div class="limit-panel">
           {#each limitations as limitation}
             <div class="limit-item">
               <span class="limit-bullet">!</span>
-              <p>{limitation}</p>
+              <div class="math-block compact">{@html renderBlockMath(limitation)}</div>
             </div>
           {/each}
         </div>
       </div>
-    </div>
-  </article>
-
-  <article class="retro-window">
-    <div class="window-bar orange">
-      <span>What Worked</span>
-      <span class="window-controls">_ □ ×</span>
-    </div>
-    <div class="window-body stacked">
-      <div class="section-head compact">
-        <p class="section-kicker">Proof of concept</p>
-        <h3>Observed successes</h3>
-      </div>
-
-      <div class="results-list">
-        {#each successPanels as panel}
-          <section class="result-card">
-            <h4>{panel.title}</h4>
-            <p>{panel.text}</p>
-          </section>
-        {/each}
-      </div>
-    </div>
-  </article>
+    </article>
+  </div>
 </section>
 
 <style>
@@ -268,26 +252,31 @@
     align-items: center;
     padding: 0.55rem 0.8rem;
     border-bottom: 2px solid #2b2340;
-    background: linear-gradient(90deg, #2f2750, #19162d);
-    color: #fff3ff;
     text-transform: uppercase;
     font-size: 0.8rem;
     letter-spacing: 0.08em;
+    color: #120a20;
   }
 
   .window-bar.gold {
-    background: linear-gradient(90deg, #ffca54, #ff8f49);
-    color: #2a1300;
+    background: linear-gradient(90deg, #ffe972, #ff8a4d);
   }
 
   .window-bar.violet {
-    background: linear-gradient(90deg, #7f63ff, #d749c5);
-    color: #140822;
+    background: linear-gradient(90deg, #d191ff, #6d5cff);
+    color: #fef6ff;
+  }
+
+  .window-bar.cyan {
+    background: linear-gradient(90deg, #79e7ff, #2e9fff);
   }
 
   .window-bar.orange {
-    background: linear-gradient(90deg, #ffb347, #ff6e42);
-    color: #241105;
+    background: linear-gradient(90deg, #ffbc68, #ff7c44);
+  }
+
+  .window-bar.red {
+    background: linear-gradient(90deg, #ff8f9e, #ff4d6d);
   }
 
   .window-controls {
@@ -298,15 +287,26 @@
     padding: 1rem 1.1rem 1.15rem;
   }
 
-  .window-body.split {
+  .hero-layout,
+  .solver-layout,
+  .stacked {
     display: grid;
     gap: 1rem;
-    grid-template-columns: minmax(0, 1.2fr) minmax(14rem, 0.8fr);
   }
 
-  .window-body.stacked {
+  .hero-layout {
+    grid-template-columns: minmax(0, 1.45fr) minmax(16rem, 0.8fr);
+    align-items: start;
+  }
+
+  .solver-layout {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .lower-grid {
     display: grid;
-    gap: 1rem;
+    gap: 1.15rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .hero-split {
@@ -321,37 +321,180 @@
     font-size: 1.5rem;
   }
 
-  .window-copy h3,
-  .section-head h3 {
-    margin: 0.25rem 0 0.75rem;
+  .hero-copy h2,
+  .section-head h3,
+  .solver-copy h3 {
+    margin: 0.2rem 0 0.8rem;
     font-family: "Glastone", "Dotemp", monospace;
     color: #fff6a8;
-    line-height: 1.05;
+    line-height: 1.02;
   }
 
-  .window-copy p,
-  .retro-window p,
-  .retro-window li {
+  .hero-copy p,
+  .solver-copy p,
+  .theory-card p,
+  .solver-step p,
+  .result-card p,
+  .limit-item p,
+  .equation-strip p,
+  .signal-panel p {
+    margin: 0;
     color: #efdaf9;
     line-height: 1.65;
   }
 
-  .pixel-panel,
-  .pixel-card,
+  .math-block {
+    margin: 0;
+    padding: 0.75rem 0.85rem;
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    background: rgba(9, 12, 22, 0.56);
+    color: #fff6c7;
+    font-family: "Glastone", "Dotemp", monospace;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .math-block :global(.katex-display) {
+    margin: 0;
+  }
+
+  .math-block :global(.katex) {
+    color: inherit;
+    font-size: 1em;
+  }
+
+  .math-block.compact {
+    padding: 0.55rem 0.7rem;
+  }
+
+  .math-block.emphasis {
+    background: rgba(255, 233, 114, 0.08);
+  }
+
+  .matrix-math {
+    overflow-x: auto;
+  }
+
+  .signal-panel,
   .theory-card,
-  .result-card {
+  .solver-step,
+  .result-card,
+  .matrix-board,
+  .limit-panel,
+  .equation-strip > div {
     border: 2px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.035);
+  }
+
+  .signal-panel {
+    padding: 0.95rem;
+    background:
+      linear-gradient(180deg, rgba(255, 233, 114, 0.12), rgba(122, 41, 255, 0.08)),
+      rgba(255, 255, 255, 0.035);
+  }
+
+  .panel-label,
+  .result-tag,
+  .eq-label,
+  .step-label {
+    display: inline-block;
+    margin-bottom: 0.65rem;
+    color: #84c3ff;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.72rem;
+  }
+
+  .signal-flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+    margin-bottom: 0.9rem;
+    font-family: "Glastone", "Dotemp", monospace;
+    font-size: clamp(1.2rem, 2vw, 1.85rem);
+    color: #ffe972;
+    line-height: 1.1;
+  }
+
+  .pipeline-grid {
+    display: grid;
+    gap: 0.9rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .theory-card,
+  .solver-step,
+  .result-card {
+    padding: 0.95rem;
+  }
+
+  .theory-topline {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.65rem;
+  }
+
+  .step-chip {
+    min-width: 2.2rem;
+    padding: 0.25rem 0.45rem;
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff6a8;
+    text-align: center;
+  }
+
+  .theory-card h4,
+  .solver-step h4,
+  .result-card h4 {
+    margin: 0 0 0.45rem;
+    color: #fff3ff;
+    font-family: "Glastone", "Dotemp", monospace;
+    font-size: 1.1rem;
+  }
+
+  .theory-summary {
+    margin-bottom: 0.55rem;
+    color: #fff5c2;
+  }
+
+  .solver-rail,
+  .results-list {
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  .results-list.short {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .matrix-board {
+    display: grid;
+    gap: 0.85rem;
+    padding: 0.95rem;
+  }
+
+  .matrix-grid {
+    display: grid;
+    gap: 0.8rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .limit-panel {
+    display: grid;
+    gap: 0.7rem;
     padding: 0.9rem;
   }
 
-  .pixel-panel {
+  .limit-item {
     display: grid;
-    align-content: start;
-    min-height: 12rem;
-    background:
-      linear-gradient(180deg, rgba(255, 211, 97, 0.14), rgba(255, 72, 130, 0.08)),
-      rgba(255, 255, 255, 0.03);
+    grid-template-columns: auto 1fr;
+    gap: 0.75rem;
+    align-items: start;
   }
 
   .pixel-label,
@@ -380,94 +523,41 @@
     color: #fff4c7;
   }
 
-  .equation-line.compact {
-    margin-top: 0.6rem;
-  }
-
-  .math-caption {
+  .takeaway-copy {
     margin-top: 1rem;
-  }
-
-  .pipeline-grid,
-  .results-list {
-    display: grid;
-    gap: 1rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .theory-topline {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    margin-bottom: 0.65rem;
-  }
-
-  .step-chip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 2.2rem;
-    padding: 0.18rem 0.45rem;
-    background: rgba(255, 246, 168, 0.12);
-    color: #fff6a8;
-    border: 1px solid rgba(255, 246, 168, 0.28);
-  }
-
-  .step-label {
-    color: #84c3ff;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    font-size: 0.78rem;
-  }
-
-  .theory-card h4,
-  .result-card h4 {
-    margin: 0 0 0.45rem;
-    font-family: "Glastone", "Dotemp", monospace;
-    color: #fff6a8;
-    line-height: 1.08;
-  }
-
-  .limitations {
-    display: grid;
-    gap: 0.7rem;
-    margin-top: 1rem;
-  }
-
-  .limit-item {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.65rem;
-    align-items: start;
-    border: 2px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.025);
-    padding: 0.7rem 0.75rem;
-  }
-
-  .limit-bullet {
-    color: #ff8fcb;
-    font-family: "Glastone", "Dotemp", monospace;
-  }
-
-  .limit-item p {
-    margin: 0;
   }
 
   :global(.equation-line .katex) {
-    font-size: 1.25rem;
+    font-size: 1.02rem;
+  }
+
+  .section-head.compact h3,
+  .section-head.compact .section-kicker {
+    margin-bottom: 0.45rem;
   }
 
   @media (max-width: 1080px) {
-    .window-body.split,
+    .hero-layout,
+    .solver-layout,
+    .lower-grid,
     .pipeline-grid,
-    .results-list {
+    .results-list.short,
+    .matrix-grid {
       grid-template-columns: minmax(0, 1fr);
     }
   }
 
-  @media (max-width: 980px) {
+  @media (max-width: 760px) {
     .page-shell {
       padding: 0.8rem;
+    }
+
+    .window-body {
+      padding: 0.9rem;
+    }
+
+    .signal-flow {
+      font-size: 1rem;
     }
   }
 </style>
