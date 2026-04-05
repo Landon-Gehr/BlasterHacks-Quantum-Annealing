@@ -28,10 +28,68 @@
     <article class="about-card">
       <p class="window-tag">ABOUT US</p>
       <h2>Who are we?</h2>
-      <p>Byron Selvage: BS in AMS. MS in AMS in progress...</p>
-      <p>Landon Gehr: BS in CS. MS in CS in progress...</p>
-      <p>Kyle Sperber: BS in AMS and Physics. MS in AMS and Physics done?</p>
-      <p>Melody Goldanloo: BS in CS and MS in QE Software in progress...</p>
+      <div class="contributors">
+        <section class="contributor">
+          <h3>Byron Selvage</h3>
+          <p>BS in AMS. MS in AMS in progress...</p>
+          <a
+            class="profile-link"
+            href="https://www.linkedin.com/in/byronselvage/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Byron Selvage LinkedIn"
+          >
+            <img src="/icons/pixel-linkedin.png" alt="" class="profile-icon" />
+            <span class="profile-tooltip">LinkedIn</span>
+          </a>
+        </section>
+
+        <section class="contributor">
+          <h3>Landon Gehr</h3>
+          <p>BS in CS and MS in Data Science. MS in AMS in progress...</p>
+          <a
+            class="profile-link"
+            href="https://www.linkedin.com/in/landon-gehr/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Landon Gehr LinkedIn"
+          >
+            <img src="/icons/pixel-linkedin.png" alt="" class="profile-icon" />
+            <span class="profile-tooltip">LinkedIn</span>
+          </a>
+        </section>
+
+        <section class="contributor">
+          <h3>Kyle Sperber</h3>
+          <p>BS in AMS and Physics and MS in AMS. MS in Physics in progress... PhD in Nuclear Engineering at UC Berkley coming soon...</p>
+          <a
+            class="profile-link"
+            href="https://www.linkedin.com/in/kyle-sperber-55572b240/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Kyle Sperber LinkedIn"
+          >
+            <img src="/icons/pixel-linkedin.png" alt="" class="profile-icon" />
+            <span class="profile-tooltip">LinkedIn</span>
+          </a>
+        </section>
+
+        <section class="contributor">
+          <h3>Melody Goldanloo</h3>
+          <p>BS in CS and MS in QE Software in progress...</p>
+          <a
+            class="profile-link"
+            href="https://www.linkedin.com/in/melody-goldanloo/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Melody Goldanloo LinkedIn"
+          >
+            <img src="/icons/pixel-linkedin.png" alt="" class="profile-icon" />
+            <span class="profile-tooltip">LinkedIn</span>
+          </a>
+        </section>
+      </div>
+
       <a
         class="github-link"
         href="https://github.com/Landon-Gehr/BlasterHacks-Quantum-Annealing"
@@ -157,16 +215,85 @@
     line-height: 1.05;
   }
 
+  .contributors {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .contributor {
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .contributor:last-of-type {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .contributor h3 {
+    margin: 0 0 0.3rem;
+    font-family: "Glastone", "Dotemp", monospace;
+    color: #fff6a8;
+    line-height: 1.05;
+    font-size: 1.1rem;
+  }
+
   .about-card p {
     color: #efdaf9;
     line-height: 1.65;
+  }
+
+  .profile-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.2rem;
+    color: #84c3ff;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.82rem;
+  }
+
+  .profile-link:hover,
+  .profile-link:focus-visible {
+    color: #fff6a8;
+  }
+
+  .profile-icon {
+    width: 22px;
+    height: 22px;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  .profile-tooltip {
+    opacity: 0;
+    transform: translateX(-4px);
+    transition:
+      opacity 0.18s ease,
+      transform 0.18s ease;
+    color: currentColor;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+
+  .profile-link:hover .profile-tooltip,
+  .profile-link:focus-visible .profile-tooltip {
+    opacity: 1;
+    transform: translateX(0);
   }
 
   .github-link {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
-    margin-top: 1.2rem;
+    justify-content: center;
+    align-self: center;
+    margin: 1.2rem auto 0;
     padding: 0;
     border: none;
     background: transparent;
