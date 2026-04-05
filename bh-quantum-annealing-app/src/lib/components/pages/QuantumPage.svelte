@@ -1,108 +1,18 @@
 <script lang="ts">
-  import katex from "katex";
+  import Katex from "svelte-katex";
 
-  function renderBlockMath(expression: string): string {
-    return katex.renderToString(expression, {
-      displayMode: true,
-      throwOnError: false,
-      strict: "ignore"
-    });
-  }
-
-  function formatNumber(value: number): string {
-    if (Number.isInteger(value)) {
-      return value.toString();
-    }
-
-    return value.toFixed(6).replace(/\.?0+$/, "");
-  }
-
-  function vectorToLatex(values: number[]): string {
-    return String.raw`\begin{bmatrix}${values.map(formatNumber).join(String.raw`\\`)}\end{bmatrix}`;
-  }
-
-  function matrixToLatex(values: number[][]): string {
-    return String.raw`\begin{bmatrix}${values
-      .map((row) => row.map(formatNumber).join(" & "))
-      .join(String.raw`\\`)}\end{bmatrix}`;
-  }
-
-  const pipeline = [
-    {
-      step: "01",
-      title: "PDE",
-      label: "Continuous problem",
-      math: String.raw`-\Delta u = f \text{ on } \Omega, \qquad u|_{\partial \Omega} = 0`,
-      objective: String.raw`\min_{u \in \mathbb{R}^{\Omega}} \; \mathcal{L}(u)`
-    },
-    {
-      step: "02",
-      title: "Linear System",
-      label: "Discretize the operators",
-      math: String.raw`A x = b`,
-      objective: String.raw`\min_{x \in \mathbb{R}^n} \; \|A x - b\|_2^2`
-    },
-    {
-      step: "03",
-      title: "QUBO",
-      label: "Encode continuous values in bits",
-      math: String.raw`x \approx x(q), \qquad q \in \{0,1\}^N`,
-      objective: String.raw`\min_{q \in \{0,1\}^N} \; q^\top Q q`
-    },
-    {
-      step: "04",
-      title: "Ising",
-      label: "Transform to spins in {-1, 1}",
-      math: String.raw`q_i = \tfrac{1 + s_i}{2}, \qquad s_i \in \{-1,1\}`,
-      objective: String.raw`\min_{s \in \{-1,1\}^N} \; \sum_{i<j} J_{ij} s_i s_j + \sum_i h_i s_i + c`
-    }
-  ];
-
-  const solverStages = [
-    String.raw`E(x) = \|A x - b\|_2^2`,
-    String.raw`x_i \approx u_{\min} + \sum_{k=0}^{K-1} w_k q_{ik}`,
-    String.raw`E(q) = q^\top Q q`,
-    String.raw`E(s) = \sum_{i<j} J_{ij} s_i s_j + \sum_i h_i s_i + c`
-  ];
-
-  const solvedSystem = {
-    a: [
-      [1.0, 3.0, 0.0, 2.0, 0.0],
-      [0.0, 0.0, 4.0, 6.0, 5.0],
-      [3.0, 1.0, 3.0, 0.0, 2.0],
-      [1.0, 0.0, 0.0, 0.0, 3.0],
-      [2.0, 0.0, 5.0, 1.0, 0.0]
-    ],
-    b: [15.0, 61.0, 24.0, 16.0, 21.0],
-    xRecovered: [1.1697191697191698, 1.8876678876678876, 2.8156288156288154, 4.075702075702075, 4.835164835164836],
-    xTrue: [1, 2, 3, 4, 5],
-    encoding: String.raw`u_{\min} = 0, \quad u_{\max} = 10, \quad k = 12`
-  };
-
-  const successPanels = [
-    {
-      title: "5x5 dense test",
-      math: String.raw`\min_{x \in \mathbb{R}^5} \|A x - b\|_2^2`
-    },
-    {
-      title: "Coarse Poisson solve",
-      math: String.raw`-\Delta u = f, \qquad u_{QA} \approx u_{\mathrm{manufactured}}`
-    }
-  ];
-
-  const limitations = [
-    String.raw`x_i \text{ is quantized to } k \text{ bits}`,
-    String.raw`N_{\mathrm{binary}} = k \cdot N_{\mathrm{physical}}`,
-    String.raw`\text{classical simulation cost} \gg \text{practical interactive cost}`,
-    String.raw`\text{no QPU access} \Rightarrow \text{theory validation, not hardware advantage}`
-  ];
-
-  const heroEquation = String.raw`\text{PDE} \to A x = b \to q^\top Q q \to (J, h)`;
-  const systemEquation = String.raw`A x = b`;
-  const solvedMatrixA = matrixToLatex(solvedSystem.a);
-  const solvedVectorB = vectorToLatex(solvedSystem.b);
-  const solvedRecoveredX = vectorToLatex(solvedSystem.xRecovered);
-  const solvedTrueX = vectorToLatex(solvedSystem.xTrue);
+  const poissonEq = String.raw`-\Delta u(x,y)=f(x,y),\qquad u=g\text{ on }\partial\Omega`;
+  const finiteDifferenceEq = String.raw`\frac{u_{i-1,j}-2u_{i,j}+u_{i+1,j}}{\Delta x^2}+\frac{u_{i,j-1}-2u_{i,j}+u_{i,j+1}}{\Delta y^2}=f_{i,j}`;
+  const linearEq = String.raw`Au=b`;
+  const encodingEq = String.raw`u_i \approx u_{\min}+\sum_{k=0}^{K-1} w_k z_{ik},\qquad z_{ik}\in\{0,1\}`;
+  const quboEq = String.raw`\min_{z\in\{0,1\}^{nK}} z^\top Qz`;
+  const normalEq = String.raw`M=A^\top A,\qquad C=A^\top b`;
+  const isingEq = String.raw`E(s)=\sum_i h_i s_i+\sum_{i<j}J_{ij}s_is_j+c,\qquad s_i\in\{-1,1\}`;
+  const scaleEq = String.raw`q=nK,\qquad Q\in\mathbb{R}^{q\times q}`;
+  const gridScaleEq = String.raw`n=m^2\Rightarrow q=m^2K,\qquad \text{couplings scale like }m^4K^2`;
+  const exampleA = String.raw`A=\begin{bmatrix}1&3&0&2&0\\0&0&4&6&5\\3&1&3&0&2\\1&0&0&0&3\\2&0&5&1&0\end{bmatrix}`;
+  const exampleB = String.raw`b=\begin{bmatrix}15\\61\\24\\16\\21\end{bmatrix}`;
+  const exampleEncoding = String.raw`u_{\min}=0,\quad u_{\max}=10,\quad K=12\Rightarrow q=5\cdot12=60`;
 </script>
 
 <section class="page-shell">
@@ -111,23 +21,67 @@
       <span>Quantum Pipeline / Theory</span>
       <span class="window-controls">_ □ ×</span>
     </div>
-    <div class="window-body hero-layout">
-      <div class="hero-copy">
-        <p class="section-kicker">From PDE to annealing</p>
-        <h2>We turn a discretized physics problem into an optimization problem a spin system can represent.</h2>
-        <div class="math-block compact">{@html renderBlockMath(heroEquation)}</div>
+    <div class="window-body split hero-split">
+      <div class="window-copy">
+        <p class="section-kicker">Theory track</p>
+        <h3>From Poisson to annealing</h3>
+        <p>
+          The project starts with a continuous PDE, discretizes it into a linear system, encodes
+          the unknowns into binary variables, and then solves the resulting optimization problem by
+          converting it into an Ising model for annealing.
+        </p>
+        <p>
+          In the current code, the classical side builds a finite-difference Poisson system, while
+          the quantum side takes a sparse matrix <em>A</em> and right-hand side <em>b</em>,
+          constructs a QUBO, converts that QUBO to Ising form, and sends it to the
+          <code>quantrs2_anneal</code> simulator.
+        </p>
       </div>
+      <div class="pixel-panel equation-panel">
+        <span class="pixel-label">Pipeline</span>
+        <div class="equation-stack">
+          <div class="equation-line"><Katex>{poissonEq}</Katex></div>
+          <div class="equation-line"><Katex>{finiteDifferenceEq}</Katex></div>
+          <div class="equation-line"><Katex>{linearEq}</Katex></div>
+          <div class="equation-line"><Katex>{encodingEq}</Katex></div>
+          <div class="equation-line"><Katex>{quboEq}</Katex></div>
+          <div class="equation-line"><Katex>{isingEq}</Katex></div>
+        </div>
+      </div>
+    </div>
+  </article>
 
-      <aside class="signal-panel">
-        <span class="panel-label">Pipeline</span>
-        <div class="signal-flow">
-          <span>PDE</span>
-          <span>→</span>
-          <span>A x = b</span>
-          <span>→</span>
-          <span>QUBO</span>
-          <span>→</span>
-          <span>ISING</span>
+  <article class="retro-window wide">
+    <div class="window-bar">
+      <span>Worked Example</span>
+      <span class="window-controls">_ □ ×</span>
+    </div>
+    <div class="window-body split">
+      <div>
+        <p class="section-kicker">5×5 system from the Rust crate</p>
+        <p>
+          The current `quantum-solver` crate includes a concrete 5×5 linear system. It uses a
+          dense example matrix, converts it to sparse form, chooses a real-valued encoding range,
+          and builds the QUBO from there.
+        </p>
+        <p>
+          That gives a small enough system to explain the mechanics clearly while still exercising
+          the full pipeline implemented in the solver code.
+        </p>
+        <ul>
+          <li>`dense_to_csmat` and `dense_to_csvec` convert the example into sparse storage.</li>
+          <li>`compute_qubo` forms the binary objective from `A`, `b`, and the encoding.</li>
+          <li>`qubo_to_ising` converts the QUBO coefficients into Ising fields and couplings.</li>
+          <li>`solve_ising_model` runs the annealing simulator and decodes the bits back to reals.</li>
+        </ul>
+      </div>
+      <div class="pixel-card math-card">
+        <div class="pixel-badge">Current Example</div>
+        <div class="equation-stack">
+          <div class="equation-line"><Katex>{exampleA}</Katex></div>
+          <div class="equation-line"><Katex>{exampleB}</Katex></div>
+          <div class="equation-line"><Katex>{normalEq}</Katex></div>
+          <div class="equation-line"><Katex>{exampleEncoding}</Katex></div>
         </div>
         <p>
           Continuous field → sparse algebra → binary optimization → spin Hamiltonian.
@@ -163,21 +117,41 @@
     </div>
   </article>
 
-  <article class="retro-window">
-    <div class="window-bar cyan">
-      <span>How The Solver Works</span>
+  <article class="retro-window duo">
+    <div class="window-bar">
+      <span>Why It Gets Hard</span>
       <span class="window-controls">_ □ ×</span>
     </div>
-    <div class="window-body solver-layout">
-      <div class="solver-copy">
-        <p class="section-kicker">Optimization view</p>
-        <h3>Solver board</h3>
+    <div class="window-body split">
+      <div>
+        <p class="section-kicker">Scaling wall</p>
+        <p>
+          The theory is clean, but the variable count grows quickly. If a 2D grid has
+          <em>m</em>×<em>m</em> unknowns, then the linear system size is <em>n = m²</em>. Encoding
+          each unknown with <em>K</em> bits creates a QUBO with <em>q = nK</em> binary variables.
+        </p>
+        <p>
+          That means the QUBO matrix itself is <em>q × q</em>, so the interaction structure grows
+          like <em>m⁴K²</em>. This is exactly why the project works as a proof of concept on small
+          systems but becomes computationally painful when we try to scale realistic PDE grids on
+          classical hardware.
+        </p>
+        <p>
+          In short: the mapping from PDE solve to annealing objective works, but simulating the
+          quantum process classically is the bottleneck.
+        </p>
       </div>
-
-      <div class="solver-rail">
-        {#each solverStages as stage}
-          <div class="solver-step math-block">{@html renderBlockMath(stage)}</div>
-        {/each}
+      <div class="pixel-card">
+        <div class="pixel-badge">Takeaway</div>
+        <div class="equation-stack">
+          <div class="equation-line"><Katex>{scaleEq}</Katex></div>
+          <div class="equation-line"><Katex>{gridScaleEq}</Katex></div>
+        </div>
+        <p class="takeaway-copy">
+          TL;DR: the workflow is mathematically valid and small examples are informative, but the
+          state size and coupling count explode before the approach becomes a practical classical
+          replacement for standard PDE solvers.
+        </p>
       </div>
     </div>
   </article>
@@ -333,6 +307,10 @@
     display: grid;
     gap: 1.15rem;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .hero-split {
+    align-items: start;
   }
 
   .section-kicker {
@@ -519,16 +497,38 @@
     align-items: start;
   }
 
-  .limit-bullet {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.6rem;
-    height: 1.6rem;
-    border: 2px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 79, 118, 0.14);
-    color: #ffd8df;
-    font-family: "Glastone", "Dotemp", monospace;
+  .pixel-label,
+  .pixel-badge {
+    display: inline-block;
+    margin-bottom: 0.8rem;
+    color: #84c3ff;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .equation-panel,
+  .math-card {
+    align-self: start;
+  }
+
+  .equation-stack {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .equation-line {
+    overflow-x: auto;
+    padding-bottom: 0.1rem;
+    color: #fff4c7;
+  }
+
+  .takeaway-copy {
+    margin-top: 1rem;
+  }
+
+  :global(.equation-line .katex) {
+    font-size: 1.02rem;
   }
 
   .section-head.compact h3,

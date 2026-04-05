@@ -30,21 +30,6 @@
       <h2>Who are we?</h2>
       <div class="contributors">
         <section class="contributor">
-          <h3>Byron Selvage</h3>
-          <p>BS in AMS. MS in AMS in progress...</p>
-          <a
-            class="profile-link"
-            href="https://www.linkedin.com/in/byronselvage/"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Byron Selvage LinkedIn"
-          >
-            <img src="/icons/pixel-linkedin.png" alt="" class="profile-icon" />
-            <span class="profile-tooltip">LinkedIn</span>
-          </a>
-        </section>
-
-        <section class="contributor">
           <h3>Landon Gehr</h3>
           <p>BS in CS and MS in Data Science. MS in AMS in progress...</p>
           <a
@@ -60,21 +45,6 @@
         </section>
 
         <section class="contributor">
-          <h3>Kyle Sperber</h3>
-          <p>BS in AMS and Physics and MS in AMS. MS in Physics in progress... PhD in Nuclear Engineering at UC Berkley coming soon...</p>
-          <a
-            class="profile-link"
-            href="https://www.linkedin.com/in/kyle-sperber-55572b240/"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Kyle Sperber LinkedIn"
-          >
-            <img src="/icons/pixel-linkedin.png" alt="" class="profile-icon" />
-            <span class="profile-tooltip">LinkedIn</span>
-          </a>
-        </section>
-
-        <section class="contributor">
           <h3>Melody Goldanloo</h3>
           <p>BS in CS and MS in QE Software in progress...</p>
           <a
@@ -83,6 +53,36 @@
             target="_blank"
             rel="noreferrer"
             aria-label="Melody Goldanloo LinkedIn"
+          >
+            <img src="/icons/pixel-linkedin.png" alt="" class="profile-icon" />
+            <span class="profile-tooltip">LinkedIn</span>
+          </a>
+        </section>
+
+        <section class="contributor">
+          <h3>Byron Selvage</h3>
+          <p>BS in AMS. MS in AMS in progress...</p>
+          <a
+            class="profile-link"
+            href="https://www.linkedin.com/in/byronselvage/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Byron Selvage LinkedIn"
+          >
+            <img src="/icons/pixel-linkedin.png" alt="" class="profile-icon" />
+            <span class="profile-tooltip">LinkedIn</span>
+          </a>
+        </section>
+
+        <section class="contributor">
+          <h3>Kyle Sperber</h3>
+          <p>BS in AMS and Physics and MS in AMS. MS in Physics in progress... PhD in Nuclear Engineering at UC Berkley coming soon...</p>
+          <a
+            class="profile-link"
+            href="https://www.linkedin.com/in/kyle-sperber-55572b240/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Kyle Sperber LinkedIn"
           >
             <img src="/icons/pixel-linkedin.png" alt="" class="profile-icon" />
             <span class="profile-tooltip">LinkedIn</span>
