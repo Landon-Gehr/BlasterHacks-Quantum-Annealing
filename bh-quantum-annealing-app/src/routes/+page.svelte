@@ -95,6 +95,12 @@
     font-display: swap;
   }
 
+  @font-face {
+    font-family: "Kalesi";
+    src: url("/fonts/KalesiPixel-Regular.otf") format("opentype");
+    font-display: swap;
+  }
+
   :global(html) {
     scroll-behavior: smooth;
   }
@@ -107,6 +113,11 @@
       radial-gradient(circle at 80% 22%, rgba(44, 155, 255, 0.18), transparent 28%),
       linear-gradient(180deg, #090910 0%, #0e0814 56%, #07070c 100%);
     font-family: "Dotemp", "RetroByte", monospace;
+  }
+
+  :global(p),
+  :global(li) {
+    font-family: "Kalesi", "Dotemp", "RetroByte", monospace;
   }
 
   :global(button),
