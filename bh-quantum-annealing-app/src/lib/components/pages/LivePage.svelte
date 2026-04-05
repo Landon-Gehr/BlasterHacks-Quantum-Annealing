@@ -1,72 +1,5 @@
 <script lang="ts">
-  const FIXED_SYSTEM_SIZE = 32;
-  const FIXED_DOMAIN_DISPLAY = "4π";
-  const FIXED_QUBO_BITS = 3;
-  const MIN_COEFF = -10;
-  const MAX_COEFF = 10;
-
-  let coeffSinX = $state(1);
-  let coeffSinY = $state(1);
-  let coeffCosX = $state(1);
-  let coeffCosY = $state(1);
-  let coeffSinXY = $state(1);
-  let coeffCosXY = $state(1);
-  let boundaryFunction = $state("0");
-  let status = $state("Retro preview ready.");
-
-  function updateCoefficient(setter: (value: number) => void, event: Event) {
-    const target = event.currentTarget as HTMLInputElement;
-    const parsed = Number(target.value);
-    if (Number.isNaN(parsed)) {
-      return;
-    }
-
-    setter(Math.max(MIN_COEFF, Math.min(MAX_COEFF, parsed)));
-  }
-
-  function resetInputs() {
-    coeffSinX = 1;
-    coeffSinY = 1;
-    coeffCosX = 1;
-    coeffCosY = 1;
-    coeffSinXY = 1;
-    coeffCosXY = 1;
-    boundaryFunction = "0";
-    status = "Poisson inputs reset to defaults.";
-  }
-
-  function loadDemo() {
-    resetInputs();
-    boundaryFunction = "sin(x) + cos(y)";
-    status = "Loaded the placeholder Poisson demo.";
-  }
-
-  function generatePreview() {
-    status = "Preview generated for the current Poisson setup.";
-  }
-
-  function coefficientString(value: number): string {
-    return Number.isInteger(value) ? value.toString() : value.toFixed(2).replace(/\.?0+$/, "");
-  }
-
-  function term(value: number, basis: string): string {
-    return `${coefficientString(value)}${basis}`;
-  }
-
-  function forcingExpression(): string {
-    return [
-      term(coeffSinX, " sin(x)"),
-      term(coeffSinY, " sin(y)"),
-      term(coeffCosX, " cos(x)"),
-      term(coeffCosY, " cos(y)"),
-      term(coeffSinXY, " sin(x)sin(y)"),
-      term(coeffCosXY, " cos(x)cos(y)")
-    ].join(" + ");
-  }
-
-  function quboDimension(): number {
-    return FIXED_SYSTEM_SIZE * FIXED_QUBO_BITS;
-  }
+  import AllenCahnDrawer from "$lib/components/AllenCahnDrawer.svelte";
 </script>
 
 <section class="page-shell">
@@ -90,104 +23,20 @@
 
   <article class="retro-window full">
     <div class="window-bar orange">
-      <span>Current Poisson setup placeholder</span>
+      <span>Allen-Cahn drawer</span>
       <span class="window-controls">_ □ ×</span>
     </div>
     <div class="window-body stacked">
       <div class="compact-intro">
-        <p class="section-kicker">Existing workflow</p>
-        <h3>Retro-window version of the current form</h3>
+        <p class="section-kicker">Initial state editor</p>
+        <h3>Draw the mask that seeds the evolution</h3>
         <p>
-          This is where the current Poisson setup lives for now, inside a full-width retro page
-          rather than a utility dashboard split.
+          This is the browser version of the drawer from the <code>Alen-Cahn</code> folder. Paint
+          the initial condition here, then use that mask as the starting state for the Allen-Cahn
+          simulation.
         </p>
       </div>
-
-      <section class="control-block">
-        <h4>Forcing function</h4>
-        <div class="formula-editor">
-          <span>f(x, y) =</span>
-          <input
-            type="number"
-            min={MIN_COEFF}
-            max={MAX_COEFF}
-            step="any"
-            bind:value={coeffSinX}
-            onchange={(event) => updateCoefficient((value) => (coeffSinX = value), event)}
-          />
-          <span>sin(x) +</span>
-          <input
-            type="number"
-            min={MIN_COEFF}
-            max={MAX_COEFF}
-            step="any"
-            bind:value={coeffSinY}
-            onchange={(event) => updateCoefficient((value) => (coeffSinY = value), event)}
-          />
-          <span>sin(y) +</span>
-          <input
-            type="number"
-            min={MIN_COEFF}
-            max={MAX_COEFF}
-            step="any"
-            bind:value={coeffCosX}
-            onchange={(event) => updateCoefficient((value) => (coeffCosX = value), event)}
-          />
-          <span>cos(x) +</span>
-          <input
-            type="number"
-            min={MIN_COEFF}
-            max={MAX_COEFF}
-            step="any"
-            bind:value={coeffCosY}
-            onchange={(event) => updateCoefficient((value) => (coeffCosY = value), event)}
-          />
-          <span>cos(y) +</span>
-          <input
-            type="number"
-            min={MIN_COEFF}
-            max={MAX_COEFF}
-            step="any"
-            bind:value={coeffSinXY}
-            onchange={(event) => updateCoefficient((value) => (coeffSinXY = value), event)}
-          />
-          <span>sin(x)sin(y) +</span>
-          <input
-            type="number"
-            min={MIN_COEFF}
-            max={MAX_COEFF}
-            step="any"
-            bind:value={coeffCosXY}
-            onchange={(event) => updateCoefficient((value) => (coeffCosXY = value), event)}
-          />
-          <span>cos(x)cos(y)</span>
-        </div>
-      </section>
-
-      <section class="control-grid">
-        <div class="control-block">
-          <h4>Boundary function</h4>
-          <label class="field">
-            <span>g on ∂Ω</span>
-            <input type="text" bind:value={boundaryFunction} />
-          </label>
-        </div>
-
-        <div class="control-block preview-block">
-          <h4>Preview</h4>
-          <p>Ω = (0, {FIXED_DOMAIN_DISPLAY}) × (0, {FIXED_DOMAIN_DISPLAY})</p>
-          <p>−Δu(x, y) = {forcingExpression()} in Ω</p>
-          <p>u(x, y) = {boundaryFunction} on ∂Ω</p>
-          <p>Internal QUBO dimension: {quboDimension()}</p>
-          <p class="status-line">{status}</p>
-        </div>
-      </section>
-
-      <div class="action-row">
-        <button type="button" class="primary" onclick={generatePreview}>Generate Preview</button>
-        <button type="button" onclick={loadDemo}>Load Demo</button>
-        <button type="button" onclick={resetInputs}>Reset</button>
-      </div>
+      <AllenCahnDrawer />
     </div>
   </article>
 </section>
@@ -266,77 +115,9 @@
     line-height: 1.65;
   }
 
-  .control-grid {
-    display: grid;
-    gap: 1rem;
-    grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.9fr);
-  }
-
-  .control-block {
-    border: 2px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.035);
-    padding: 0.9rem;
-  }
-
-  .formula-editor {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.55rem;
-    margin-top: 0.75rem;
-  }
-
-  .formula-editor input,
-  .field input {
-    width: 4.8rem;
-    border: 2px solid #332b4b;
-    background: #0c0b14;
-    color: #ffeefc;
-    padding: 0.55rem 0.6rem;
-    outline: none;
-  }
-
-  .field {
-    display: grid;
-    gap: 0.6rem;
-  }
-
-  .field input {
-    width: 100%;
-  }
-
-  .preview-block p,
-  .status-line {
-    margin: 0.35rem 0;
-  }
-
-  .action-row {
-    display: flex;
-    gap: 0.8rem;
-    flex-wrap: wrap;
-  }
-
-  .action-row button {
-    border: 2px solid #38294f;
-    background: linear-gradient(180deg, #181420, #100d16);
-    color: #fbeeff;
-    padding: 0.7rem 1rem;
-    cursor: pointer;
-    box-shadow: 4px 4px 0 #06050a;
-  }
-
-  .action-row button.primary {
-    background: linear-gradient(180deg, #ff4aa2, #b8307d);
-    color: #250812;
-  }
-
   @media (max-width: 980px) {
     .page-shell {
       padding: 0.8rem;
-    }
-
-    .control-grid {
-      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>
