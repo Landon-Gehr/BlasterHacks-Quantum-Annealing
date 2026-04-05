@@ -45,7 +45,7 @@ pub struct DiffusionModel<B: AutodiffBackend, M: AutodiffModule<B>> {
 impl<B: AutodiffBackend, M: AutodiffModule<B> + NoisePredictor<B>> DiffusionModel<B, M>
     where M: AutodiffModule<B>, {   
         pub fn new(device: B::Device, t: usize, res: (usize, usize), mlp: M) -> Self {
-        let optim = AdamConfig::new().with_epsilon(7.5e-5).init();
+        let optim = AdamConfig::new().with_epsilon(5e-4).init();
         let betas_vec: Vec<f32> = (0..t).map(|i| 1e-4 + (2e-2 - 1e-4) * i as f32 / (t - 1) as f32).collect();
         let betas = Tensor::<B, 1>::from_floats(betas_vec.as_slice(), &device);
         let alphas: Tensor<B, 1> = 1.0 - betas.clone();
@@ -134,7 +134,7 @@ impl<B: AutodiffBackend, M: AutodiffModule<B> + NoisePredictor<B>> DiffusionMode
 
                 let grads = loss.backward();
                 let grads = GradientsParams::from_grads(grads, &self.mlp);
-                self.mlp = self.optim.step(7.5e-5, self.mlp.clone(), grads);
+                self.mlp = self.optim.step(5e-4, self.mlp.clone(), grads);
             }
 
             epoch_train_loss = batch_losses.iter().sum::<f32>() / batch_losses.len() as f32;
@@ -353,13 +353,13 @@ fn load_data(filename: &str, batch_size: usize, h: usize, w: usize, device: &<My
 fn main() {
     let res: (usize, usize) = (32,32);
     let batch_size = 256;
-    let n_timesteps = 2500;
+    let n_timesteps = 25;
     let device = <MyAutodiff as Backend>::Device::default();
     let mlp = ErrorCnn::<MyAutodiff>::new(&device, res, n_timesteps);
     // let mlp = ErrorMlp::<MyAutodiff>::new(&device, res, t);
     let mut model = DiffusionModel::new(device.clone(), n_timesteps, res, mlp);
     let train_x = load_data("training.dat", batch_size, res.0, res.1, &device);
-    model.train(train_x, 250);
+    model.train(train_x, 500);
 
 
     // let model = DiffusionModel::load(device.clone(), n_timesteps, "model", res, mlp);

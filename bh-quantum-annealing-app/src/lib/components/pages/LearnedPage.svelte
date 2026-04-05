@@ -5,18 +5,22 @@
       <span class="window-controls">_ □ ×</span>
     </div>
     <div class="window-body stacked">
-      <p class="section-kicker">Placeholder</p>
-      <h2>Landon’s section goes here</h2>
+      <p class="section-kicker">Learning with DDPMs</p>
+      <h2>Denoising Diffusion Probabilistic Modeling</h2>
       <p>
-        This page is reserved for the learned-solver narrative and whatever “improves halfway
-        solved solution?” turns into once you have the final details.
+        A DDPM is a type of generative AI model that learns a target distribution through iterative predictions of gaussian errors.
       </p>
       <div class="pixel-card alt">
-        <p>Planned content:</p>
+        <p> About DDPMs <a href="https://arxiv.org/abs/2006.11239"> Here</a> </p>
         <ul>
-          <li>What the learned solver changes</li>
-          <li>Where it helps relative to the baseline</li>
-          <li>Illustrations or solver-state comparisons</li>
+          $$asdfsdsa_Dfasdfsa$$
+          <img src="../markov_chain.png">
+          <img src="../ddpm_training.png">
+          <img src="../before.png">
+          <img src="../diffused_25.png">
+          <img src="../diffused_50.png">
+          <img src="../diffused_100.png">
+          <img src="../diffused.png">
         </ul>
       </div>
     </div>
