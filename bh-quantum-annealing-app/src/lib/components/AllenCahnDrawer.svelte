@@ -1,10 +1,16 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
 
-  const GRID_SIZE = 128;
-  const EPSILON = 0.85;
-  const TIME_STEP = 0.08;
-  const SUBSTEPS_PER_FRAME = 3;
+  const GRID_SIZE = 125;
+  const TIME_STEP = 0.05;
+  const SUBSTEPS_PER_FRAME = 1;
+  const DX = 1 / (GRID_SIZE - 1);
+  const DY = DX;
+  const EPSILON = DX;
+  const SOLVER_TOLERANCE = 1e-4;
+  const SOLVER_MAX_ITERATIONS = 80;
+  const BASE_AMPLITUDE = 0.03;
+  const NOISE_AMPLITUDE = 0.01;
 
   let drawCanvas: HTMLCanvasElement | null = null;
   let drawContext: CanvasRenderingContext2D | null = null;
@@ -12,12 +18,15 @@
   let simContext: CanvasRenderingContext2D | null = null;
   let mask = new Uint8Array(GRID_SIZE * GRID_SIZE);
   let field = new Float32Array(GRID_SIZE * GRID_SIZE);
+  let initialField = new Float32Array(GRID_SIZE * GRID_SIZE);
 
-  let brushRadius = $state(2);
+  let brushRadius = $state(4);
   let drawing = $state(false);
   let filledPixels = $state(0);
   let simulationRunning = $state(false);
   let framesRendered = $state(0);
+  let simulatedTime = $state(0);
+  let currentMass = $state(0);
   let animationFrameId: number | null = null;
   let simStatus = $state("Draw an initial condition, then run the evolution.");
 
@@ -27,6 +36,30 @@
 
   function updateFilledPixels() {
     filledPixels = mask.reduce((total, value) => total + value, 0);
+  }
+
+  function pseudoRandom(index: number): number {
+    const value = Math.sin((index + 1) * 12.9898) * 43758.5453;
+    return value - Math.floor(value);
+  }
+
+  function buildFieldFromMask(): Float32Array {
+    const seededField = new Float32Array(GRID_SIZE * GRID_SIZE);
+    let sum = 0;
+
+    for (let index = 0; index < seededField.length; index += 1) {
+      const base = mask[index] === 1 ? BASE_AMPLITUDE : -BASE_AMPLITUDE;
+      const noise = (pseudoRandom(index) - 0.5) * NOISE_AMPLITUDE;
+      seededField[index] = base + noise;
+      sum += seededField[index];
+    }
+
+    const mean = sum / seededField.length;
+    for (let index = 0; index < seededField.length; index += 1) {
+      seededField[index] = clampFieldValue(seededField[index] - mean);
+    }
+
+    return seededField;
   }
 
   function renderMask() {
@@ -133,6 +166,10 @@
   function clearCanvas() {
     stopEvolution();
     mask = new Uint8Array(GRID_SIZE * GRID_SIZE);
+    field = new Float32Array(GRID_SIZE * GRID_SIZE);
+    initialField = new Float32Array(GRID_SIZE * GRID_SIZE);
+    currentMass = 0;
+    simulatedTime = 0;
     updateFilledPixels();
     renderMask();
     clearSimulationView();
@@ -167,6 +204,14 @@
 
     simContext.fillStyle = "#0a0c12";
     simContext.fillRect(0, 0, GRID_SIZE, GRID_SIZE);
+  }
+
+  function fieldMass(values: Float32Array): number {
+    let total = 0;
+    for (let index = 0; index < values.length; index += 1) {
+      total += values[index];
+    }
+    return total * DX * DY;
   }
 
   function clampFieldValue(value: number): number {
@@ -224,37 +269,147 @@
   }
 
   function initializeFieldFromMask() {
-    const seededField = new Float32Array(GRID_SIZE * GRID_SIZE);
+    const seededField = buildFieldFromMask();
 
-    for (let index = 0; index < seededField.length; index += 1) {
-      const base = mask[index] === 1 ? 1 : -1;
-      const noise = (Math.random() - 0.5) * 0.35;
-      seededField[index] = clampFieldValue(base + noise);
-    }
-
-    field = seededField;
+    field = seededField.slice();
+    initialField = seededField.slice();
+    currentMass = fieldMass(field);
+    simulatedTime = 0;
   }
 
-  function evolveOneStep() {
-    const next = new Float32Array(field.length);
-    const epsilonSquared = EPSILON * EPSILON;
+  function applyLaplacian(input: Float32Array, output: Float32Array) {
+    const inverseDxSquared = 1 / (DX * DX);
 
     for (let row = 0; row < GRID_SIZE; row += 1) {
       for (let col = 0; col < GRID_SIZE; col += 1) {
         const index = cellIndex(row, col);
-        const center = field[index];
-        const left = field[cellIndex(row, Math.max(col - 1, 0))];
-        const right = field[cellIndex(row, Math.min(col + 1, GRID_SIZE - 1))];
-        const up = field[cellIndex(Math.max(row - 1, 0), col)];
-        const down = field[cellIndex(Math.min(row + 1, GRID_SIZE - 1), col)];
-        const laplacian = left + right + up + down - 4 * center;
-        const reaction = center ** 3 - 2 * center;
+        const center = input[index];
 
-        next[index] = clampFieldValue(center + TIME_STEP * (epsilonSquared * laplacian - reaction));
+        const horizontal = col === 0
+          ? 2 * (input[cellIndex(row, 1)] - center)
+          : col === GRID_SIZE - 1
+            ? 2 * (input[cellIndex(row, GRID_SIZE - 2)] - center)
+            : input[cellIndex(row, col - 1)] - 2 * center + input[cellIndex(row, col + 1)];
+
+        const vertical = row === 0
+          ? 2 * (input[cellIndex(1, col)] - center)
+          : row === GRID_SIZE - 1
+            ? 2 * (input[cellIndex(GRID_SIZE - 2, col)] - center)
+            : input[cellIndex(row - 1, col)] - 2 * center + input[cellIndex(row + 1, col)];
+
+        output[index] = (horizontal + vertical) * inverseDxSquared;
       }
     }
+  }
 
-    field = next;
+  function applyBackwardEulerMatrix(input: Float32Array, output: Float32Array) {
+    const laplacian = new Float32Array(input.length);
+    const diffusionScale = TIME_STEP * EPSILON * EPSILON;
+
+    applyLaplacian(input, laplacian);
+
+    for (let index = 0; index < input.length; index += 1) {
+      output[index] = input[index] - diffusionScale * laplacian[index];
+    }
+  }
+
+  function dot(left: Float32Array, right: Float32Array): number {
+    let total = 0;
+    for (let index = 0; index < left.length; index += 1) {
+      total += left[index] * right[index];
+    }
+    return total;
+  }
+
+  function solveBackwardEuler(rhs: Float32Array, guess: Float32Array): Float32Array {
+    const solution = guess.slice();
+    const matVec = new Float32Array(rhs.length);
+    const residual = new Float32Array(rhs.length);
+    const direction = new Float32Array(rhs.length);
+    const matrixDirection = new Float32Array(rhs.length);
+
+    applyBackwardEulerMatrix(solution, matVec);
+    for (let index = 0; index < rhs.length; index += 1) {
+      residual[index] = rhs[index] - matVec[index];
+      direction[index] = residual[index];
+    }
+
+    let residualNormSq = dot(residual, residual);
+    if (Math.sqrt(residualNormSq) < SOLVER_TOLERANCE) {
+      return solution;
+    }
+
+    for (let iteration = 0; iteration < SOLVER_MAX_ITERATIONS; iteration += 1) {
+      applyBackwardEulerMatrix(direction, matrixDirection);
+      const denom = dot(direction, matrixDirection);
+      if (Math.abs(denom) < 1e-12) {
+        break;
+      }
+
+      const alpha = residualNormSq / denom;
+      for (let index = 0; index < solution.length; index += 1) {
+        solution[index] += alpha * direction[index];
+        residual[index] -= alpha * matrixDirection[index];
+      }
+
+      const nextResidualNormSq = dot(residual, residual);
+      if (Math.sqrt(nextResidualNormSq) < SOLVER_TOLERANCE) {
+        break;
+      }
+
+      const beta = nextResidualNormSq / residualNormSq;
+      for (let index = 0; index < direction.length; index += 1) {
+        direction[index] = residual[index] + beta * direction[index];
+      }
+      residualNormSq = nextResidualNormSq;
+    }
+
+    return solution;
+  }
+
+  function reactionStep(values: Float32Array): Float32Array {
+    const next = new Float32Array(values.length);
+    const decay = Math.exp(-2 * TIME_STEP);
+
+    for (let index = 0; index < values.length; index += 1) {
+      const value = values[index];
+      const denom = Math.sqrt(value * value + (1 - value * value) * decay);
+      next[index] = denom > 1e-12 ? clampFieldValue(value / denom) : 0;
+    }
+
+    return next;
+  }
+
+  function conservativeCorrection(values: Float32Array): Float32Array {
+    const corrected = values.slice();
+    let numerator = 0;
+    let denominator = 0;
+
+    for (let index = 0; index < corrected.length; index += 1) {
+      numerator += initialField[index] - corrected[index];
+      denominator += (corrected[index] * corrected[index] - 1) / 2;
+    }
+
+    if (Math.abs(denominator) < 1e-12) {
+      return corrected;
+    }
+
+    const beta = numerator / denominator;
+    for (let index = 0; index < corrected.length; index += 1) {
+      corrected[index] = clampFieldValue(
+        corrected[index] + beta * (corrected[index] * corrected[index] - 1) / 2
+      );
+    }
+
+    return corrected;
+  }
+
+  function evolveOneStep() {
+    const uStar = solveBackwardEuler(field, field);
+    const reacted = reactionStep(uStar);
+    field = conservativeCorrection(reacted);
+    currentMass = fieldMass(field);
+    simulatedTime += TIME_STEP;
   }
 
   function tickEvolution() {
@@ -267,7 +422,7 @@
     }
 
     framesRendered += 1;
-    simStatus = `Allen-Cahn evolution running. Frame ${framesRendered}.`;
+    simStatus = `Allen-Cahn evolution running. t = ${simulatedTime.toFixed(2)}, frame ${framesRendered}, mass = ${currentMass.toExponential(3)}.`;
     renderField();
     animationFrameId = window.requestAnimationFrame(tickEvolution);
   }
@@ -285,7 +440,7 @@
     initializeFieldFromMask();
     framesRendered = 0;
     simulationRunning = true;
-    simStatus = "Allen-Cahn evolution running.";
+    simStatus = `Allen-Cahn evolution running. t = 0.00, mass = ${currentMass.toExponential(3)}.`;
     renderField();
     animationFrameId = window.requestAnimationFrame(tickEvolution);
   }
@@ -311,6 +466,10 @@
     <div>
       <p class="meta-label">Initial Condition</p>
       <p class="meta-value">{filledPixels} active pixels</p>
+    </div>
+    <div>
+      <p class="meta-label">Simulation Params</p>
+      <p class="meta-value">N = {GRID_SIZE}, dt = {TIME_STEP}, eps = {EPSILON.toFixed(4)}</p>
     </div>
   </div>
 
@@ -353,7 +512,7 @@
           {:else}
             <span>idle</span>
           {/if}
-          <span>frame {framesRendered}</span>
+          <span>t = {simulatedTime.toFixed(2)}</span>
         </div>
         <div class="canvas-frame evolution-frame">
           <canvas
